@@ -144,6 +144,7 @@
           s.current ? null : h('button.btn.small', { onclick: function () { act('setCurrent', { id: s.id }, '已設為本次聚會'); } }, '設為本次聚會'),
           h('button.btn.small.amber', { onclick: showQR }, '顯示 QR Code'),
           h('a.btn.small.ghost', { href: 'screen.html' + location.search, target: '_blank' }, '開投影畫面'),
+          h('a.btn.small.ghost', { href: 'game.html' + location.search, target: '_blank' }, '小遊戲'),
           h('button.btn.small.ghost', { onclick: function () { exportCsv(s); } }, '匯出 Excel'))),
       h('p', { style: 'margin-top:12px' }, '已作答 ', h('b', answered.length), ' / ' + s.attendees.length + ' 人'),
       h('div.roll', s.attendees.map(function (id) {

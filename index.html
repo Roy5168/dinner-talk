@@ -183,6 +183,10 @@
     return h('div',
       h('div.hero', UI.scene(), h('div.eyebrow', s.title), h('h1', '謝謝你，' + S.me.name)),
       s.verse ? h('div.card.soft', h('div.verse', s.verse.replace(/（[^（）]*）$/, ''), h('small', (s.verse.match(/（([^（）]*)）$/) || [])[1] || ''))) : null,
+      h('a.card', { href: 'game.html' + location.search, style: 'display:flex;gap:14px;align-items:center;text-decoration:none;color:inherit' },
+        h('span', { style: 'font-size:2.2rem' }, '🚗'),
+        h('span', h('b.hand', { style: 'font-size:1.2rem' }, '小遊戲：夜路導航'), h('br'), h('span.hint', '看不見前面的路時，你會相信誰？約 3 分鐘')),
+        h('span', { style: 'margin-left:auto;color:var(--amber-deep);font-size:1.4rem' }, '›')),
       h('h2', { style: 'margin-top:24px' }, '大家的分享'),
       h('p.hint', '小組長公開後，大家的回答會出現在這裡（不顯示姓名）。'),
       qs.map(function (q, i) {

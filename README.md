@@ -5,5 +5,6 @@
 - 作答頁：`index.html`
 - 組長後台：`leader.html`
 - 投影畫面：`screen.html`
+- 小遊戲「夜路導航」：`game.html`
 
 部署步驟與每週使用流程請看 [SETUP.md](SETUP.md)。

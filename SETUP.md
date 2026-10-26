@@ -7,6 +7,7 @@
 | 作答頁 | `https://roy5168.github.io/dinner-talk/` | 組員、新朋友（掃 QR Code） |
 | 組長後台 | `https://roy5168.github.io/dinner-talk/leader.html` | 小組長（要密碼） |
 | 投影畫面 | `https://roy5168.github.io/dinner-talk/screen.html` | 接電視或投影機 |
+| 小遊戲：夜路導航 | `https://roy5168.github.io/dinner-talk/game.html` | 作答完成頁和後台都有連結，不收集資料 |
 
 網頁放在 GitHub Pages，答案存在你自己的 Google 試算表。GitHub 上的程式碼是公開的，但答案和密碼都不在 GitHub 上。
 
@@ -116,6 +117,7 @@ Apps Script 每次改程式都要發布新版本，否則網址會繼續跑舊�
 | `index.html` | 作答頁 |
 | `leader.html` | 組長後台 |
 | `screen.html` | 投影畫面 |
+| `game.html` | 小遊戲「夜路導航」（三關：黃昏、入夜、起霧；關卡內容寫在檔案上方的 `LEVELS`） |
 | `config.js` | Apps Script 網址設定 |
 | `assets/` | 共用樣式與程式（`api.js` 負責連線，展示模式也在這裡） |
 | `apps-script/Code.gs` | 後端程式（貼到 Google Apps Script；展示模式也直接執行這份） |
