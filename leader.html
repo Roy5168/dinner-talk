@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小組長後台</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Noto+Sans+TC:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 8px 0; }
+  .topbar .brand { display: flex; align-items: center; gap: 10px; }
+  .topbar .brand svg { width: 64px; }
+  .tabs { display: flex; gap: 4px; background: #efe3d1; padding: 4px; border-radius: 999px; overflow-x: auto; max-width: 100%; }
+  .tabs button { border: 0; background: transparent; padding: .5em 1.1em; border-radius: 999px; white-space: nowrap; color: var(--ink-soft); font-weight: 600; }
+  .tabs button.on { background: var(--paper); color: var(--wood-dark); box-shadow: 0 1px 4px rgba(94,58,37,.12); }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+  .seg button { border: 0; background: var(--paper); padding: .4em 1em; font-size: .92rem; }
+  .seg button.on { background: var(--wood); color: #fff; }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; align-items: start; }
+  .grid2 > .card { margin: 0; }
+  .q-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+  .switch { display: inline-flex; align-items: center; gap: 8px; border: 1.5px solid var(--line); background: #fff; border-radius: 999px; padding: .35em .9em .35em .4em; font-size: .9rem; font-weight: 600; white-space: nowrap; }
+  .switch i { width: 34px; height: 20px; border-radius: 10px; background: #dccbb5; position: relative; transition: background .2s; }
+  .switch i::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .2s; }
+  .switch.on { border-color: var(--olive); color: #4b5733; background: var(--olive-soft); }
+  .switch.on i { background: var(--olive); }
+  .switch.on i::after { left: 16px; }
+  .roll { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .roll span { border-radius: 999px; padding: .15em .8em; font-size: .9rem; background: #eee5d8; color: var(--ink-soft); }
+  .roll span.yes { background: var(--olive-soft); color: #4b5733; }
+  .person-ans dt { font-weight: 600; margin-top: 10px; font-size: .92rem; color: var(--ink-soft); }
+  .person-ans dd { margin: 2px 0 0; }
+  .qedit { border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin: 12px 0; background: #fff; }
+  .qedit.lock { background: #f6f7ef; border-color: #d7dcc2; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .row > .grow { flex: 1 1 200px; }
+  .checks { display: flex; flex-wrap: wrap; gap: 8px; }
+  .checks label { display: inline-flex; align-items: center; gap: 6px; border: 1.5px solid var(--line); border-radius: 999px; padding: .3em .9em; background: #fff; cursor: pointer; user-select: none; }
+  .checks label.on { border-color: var(--amber); background: #fff3e2; }
+  .checks input { accent-color: var(--amber); }
+  table.list { width: 100%; border-collapse: collapse; }
+  table.list td, table.list th { padding: 10px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+  table.list th { font-size: .85rem; color: var(--ink-soft); font-weight: 600; }
+  .qr-box { display: grid; place-items: center; padding: 10px; background: #fff; border-radius: 12px; margin: 12px auto; width: fit-content; }
+  .url { word-break: break-all; font-size: .85rem; color: var(--ink-soft); }
+  @media (max-width: 560px) { table.list .opt { display: none; } }
+</style>
+</head>
+<body>
+<main class="wrap wide" id="app"><p class="waiting">載入中<span class="dot-pulse"></span></p></main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="config.js"></script>
+<script src="assets/api.js"></script>
+<script src="assets/common.js"></script>
+<script>
+(function () {
+  var h = UI.h, app = document.getElementById('app');
+  var PW_KEY = 'dinnertalk-pw';
+  var S = { pw: null, data: null, selId: null, tab: 'live', sub: 'byQ', form: null };
+  var poller = null;
+
+  function getPw() { try { return sessionStorage.getItem(PW_KEY); } catch (e) { return null; } }
+  function setPw(v) { try { if (v) sessionStorage.setItem(PW_KEY, v); else sessionStorage.removeItem(PW_KEY); } catch (e) { /* 忽略 */ } }
+
+  function call(action, params) {
+    params = params || {};
+    params.pw = S.pw;
+    return API.call(action, params).catch(function (err) {
+      if (/密碼/.test(err.message)) { setPw(null); S.pw = null; if (poller) poller.stop(); renderLogin(err.message); }
+      throw err;
+    });
+  }
+  function act(action, params, msg) {
+    return call(action, params).then(function (r) { if (msg) UI.toast(msg); return load().then(function () { return r; }); })
+      .catch(function (err) { UI.toast(err.message, true); throw err; });
+  }
+
+  /* ---------- 登入 ---------- */
+  function renderLogin(err) {
+    app.innerHTML = '';
+    var pw = h('input', { type: 'password', placeholder: '小組長密碼', autocomplete: 'current-password' });
+    function go() {
+      S.pw = pw.value;
+      call('login').then(function () { setPw(S.pw); start(); }).catch(function (e) { UI.toast(e.message, true); });
+    }
+    pw.addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); });
+    app.appendChild(h('div', { style: 'max-width:420px;margin:0 auto' },
+      UI.demoBanner(h('span', '展示密碼：1234')),
+      h('div.hero', UI.scene(), h('h1', '小組長後台')),
+      h('div.card', err ? h('p', { style: 'color:var(--terracotta)' }, err) : null,
+        h('label.field', h('span', '密碼'), pw), h('button.btn.amber.block', { onclick: go }, '進入'))));
+    pw.focus();
+  }
+
+  function start() {
+    app.innerHTML = '<p class="waiting">載入中<span class="dot-pulse"></span></p>';
+    if (poller) poller.stop();
+    poller = UI.poll(function () { return load(true); }, 5000);
+  }
+
+  function load(fromPoll) {
+    return call('admin', { sessionId: S.selId }).then(function (r) {
+      S.data = r;
+      if (r.session) S.selId = r.session.id;
+      // 編輯中的表單與名單不在背景更新時重畫，避免打斷輸入
+      if (!fromPoll || S.tab === 'live' || S.tab === 'history' || !app.querySelector('.tabs')) render();
+    }).catch(function () { /* 已在 call 處理 */ });
+  }
+
+  /* ---------- 版面 ---------- */
+  function render() {
+    var d = S.data;
+    app.innerHTML = '';
+    var tabs = [['live', '即時回答'], ['prep', '準備聚會'], ['people', '組員名單'], ['history', '歷次紀錄']];
+    app.appendChild(UI.demoBanner(h('div.btn-row',
+      h('button.btn.small.ghost', { onclick: function () { API.demoFill().then(function () { UI.toast('已替未作答的人填入示範回答'); load(); }); } }, '填入示範回答'),
+      h('button.btn.small.ghost', { onclick: function () { if (confirm('清除所有展示資料？')) { API.demoReset(); location.reload(); } } }, '重設展示資料'))));
+    app.appendChild(h('div.topbar',
+      h('div.brand', UI.scene(), h('div', h('div.hand', { style: 'font-size:1.3rem' }, '小組長後台'), h('div.faint', d.session ? d.session.title : ''))),
+      h('div.tabs', tabs.map(function (t) {
+        return h('button' + (S.tab === t[0] ? '.on' : ''), { onclick: function () { S.tab = t[0]; if (t[0] === 'prep' && !S.form) S.form = formFrom(d.session); render(); } }, t[1]);
+      })),
+      h('button.link', { onclick: function () { setPw(null); location.reload(); } }, '登出')));
+    var body = { live: viewLive, prep: viewPrep, people: viewPeople, history: viewHistory }[S.tab]();
+    app.appendChild(body);
+  }
+
+  function peopleMap() { var m = {}; S.data.people.forEach(function (p) { m[p.id] = p; }); return m; }
+
+  /* ---------- 即時回答 ---------- */
+  function viewLive() {
+    var s = S.data.session;
+    if (!s) return h('div.card', h('p', '還沒有聚會，請到「準備聚會」建立。'));
+    var pm = peopleMap();
+    var answered = s.answers.filter(function (a) { return hasContent(a.answers); }).map(function (a) { return a.personId; });
+    var header = h('div.card',
+      h('div.row', { style: 'justify-content:space-between' },
+        h('div', h('h1', { style: 'margin:0' }, s.title), h('div.muted', UI.fmtDate(s.date), ' ',
+          s.current ? h('span.tag.olive', '本次聚會') : h('span.tag.gray', '不是本次聚會'))),
+        h('div.btn-row',
+          s.current ? null : h('button.btn.small', { onclick: function () { act('setCurrent', { id: s.id }, '已設為本次聚會'); } }, '設為本次聚會'),
+          h('button.btn.small.amber', { onclick: showQR }, '顯示 QR Code'),
+          h('a.btn.small.ghost', { href: 'screen.html' + location.search, target: '_blank' }, '開投影畫面'),
+          h('button.btn.small.ghost', { onclick: function () { exportCsv(s); } }, '匯出 Excel'))),
+      h('p', { style: 'margin-top:12px' }, '已作答 ', h('b', answered.length), ' / ' + s.attendees.length + ' 人'),
+      h('div.roll', s.attendees.map(function (id) {
+        var p = pm[id] || { name: '（已刪除）' };
+        var yes = answered.indexOf(id) >= 0;
+        return h('span' + (yes ? '.yes' : ''), (yes ? '✓ ' : '') + p.name + (p.role === '新朋友' ? '（新）' : ''));
+      })));
+
+    var seg = h('div.seg',
+      h('button' + (S.sub === 'byQ' ? '.on' : ''), { onclick: function () { S.sub = 'byQ'; render(); } }, '依題目看'),
+      h('button' + (S.sub === 'byPerson' ? '.on' : ''), { onclick: function () { S.sub = 'byPerson'; render(); } }, '依人看'));
+
+    var content = S.sub === 'byQ' ? h('div.grid2', s.questions.map(function (q, i) {
+      var on = s.published.indexOf(q.id) >= 0;
+      return h('div.card',
+        h('div.q-head',
+          h('div', h('div.q-num', q.leaderOnly ? '🔒 只有你看得到' : '第 ' + (i + 1) + ' 題'), h('h3', q.text)),
+          q.leaderOnly ? null : h('button.switch' + (on ? '.on' : ''), {
+            title: on ? '目前大家看得到這題的統計與分享（不顯示姓名）' : '公開後，大家的手機和投影畫面會看到這題的統計與分享（不顯示姓名）',
+            onclick: function () { act('setPublished', { id: s.id, qid: q.id, on: !on }, on ? '已取消公開' : '已公開，大家看得到了'); }
+          }, h('i'), on ? '已公開' : '公開這題')),
+        UI.renderResult(q, s.results[q.id], {
+          admin: true,
+          onHide: function (t) { act('setHidden', { id: s.id, key: t.key, on: !t.hidden }, t.hidden ? '已恢復公開' : '這則不會公開'); }
+        }));
+    })) : h('div.grid2', s.attendees.map(function (id) {
+      var p = pm[id] || { name: '（已刪除）' };
+      var a = s.answers.filter(function (x) { return x.personId === id; })[0];
+      return h('div.card',
+        h('div.q-head', h('h3', p.name, ' ', p.role === '新朋友' ? h('span.tag', '新朋友') : null),
+          a && a.updatedAt ? h('span.faint', timeStr(a.updatedAt)) : null),
+        a ? h('button.link', { style: 'font-size:.82rem', title: '答案只能由當初作答的那支手機修改。換手機或清了瀏覽器資料時，按這裡讓他重新點名字作答。', onclick: function () {
+          act('unlockAnswer', { sessionId: s.id, personId: id }, '已解除，' + p.name + ' 可以用新手機點名字修改');
+        } }, '換手機作答') : null,
+        a && hasContent(a.answers) ? h('dl.person-ans', s.questions.map(function (q, i) {
+          var r = a.answers[q.id] || {};
+          var parts = (r.choices || []).slice();
+          if (r.other) parts.push('其他：' + r.other);
+          return [h('dt', (q.leaderOnly ? '🔒 ' : (i + 1) + '. ') + q.text),
+            h('dd', parts.length ? parts.join('；') : h('span.faint', '（未選）')),
+            r.note ? h('dd.muted', '想多說：' + r.note) : null];
+        })) : h('p.faint', '尚未作答'));
+    }));
+
+    return h('div', header, h('div.row', { style: 'justify-content:space-between;margin:8px 0 14px' }, seg,
+      h('span.hint', '公開只顯示統計與文字，不會顯示姓名；不想公開的文字可按「不要公開」。')), content);
+  }
+
+  function hasContent(ans) {
+    return ans && Object.keys(ans).some(function (k) { var r = ans[k]; return r && ((r.choices && r.choices.length) || r.other || r.note); });
+  }
+  function timeStr(iso) {
+    var d = new Date(iso);
+    return isNaN(d) ? '' : (d.getMonth() + 1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+
+  function showQR() {
+    var url = UI.memberUrl();
+    var box = h('div.qr-box');
+    var back = h('div.modal-back', { onclick: function (e) { if (e.target === back) back.remove(); } },
+      h('div.modal', h('h2', '掃描開始作答'), box, h('p.url', url),
+        h('div.btn-row', { style: 'justify-content:center' },
+          h('button.btn.small.ghost', { onclick: function () { navigator.clipboard && navigator.clipboard.writeText(url).then(function () { UI.toast('已複製網址'); }); } }, '複製網址'),
+          h('button.btn.small', { onclick: function () { back.remove(); } }, '關閉'))));
+    document.body.appendChild(back);
+    if (window.QRCode) new QRCode(box, { text: url, width: 240, height: 240, colorDark: '#3d2b1f', colorLight: '#ffffff' });
+    else box.textContent = 'QR Code 載入失敗，請直接分享網址';
+  }
+
+  function exportCsv(s) {
+    var pm = peopleMap();
+    var head = ['姓名', '身分'];
+    s.questions.forEach(function (q, i) {
+      var t = (q.leaderOnly ? '下一步' : 'Q' + (i + 1));
+      head.push(t + ' 選項', t + ' 其他');
+      if (!q.leaderOnly) head.push(t + ' 想多說');
+    });
+    head.push('作答時間');
+    var rows = s.attendees.map(function (id) {
+      var p = pm[id] || { name: '', role: '' };
+      var a = s.answers.filter(function (x) { return x.personId === id; })[0] || { answers: {} };
+      var row = [p.name, p.role];
+      s.questions.forEach(function (q) {
+        var r = a.answers[q.id] || {};
+        row.push((r.choices || []).join('、'), r.other || '');
+        if (!q.leaderOnly) row.push(r.note || '');
+      });
+      row.push(a.updatedAt ? timeStr(a.updatedAt) : '');
+      return row;
+    });
+    var csv = [head].concat(rows).map(function (r) {
+      return r.map(function (c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(',');
+    }).join('\r\n');
+    var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    var link = h('a', { href: URL.createObjectURL(blob), download: (s.date || '') + '_' + s.title + '.csv' });
+    document.body.appendChild(link); link.click(); link.remove();
+  }
+
+  /* ---------- 準備聚會 ---------- */
+  function formFrom(s, asNew) {
+    var src = s || { title: '', verse: '', questions: [], attendees: [] };
+    var qs = JSON.parse(JSON.stringify(src.questions || []));
+    if (!qs.some(function (q) { return q.leaderOnly; })) qs.push({ id: 'next', text: '今晚之後，我的下一步', max: 0, leaderOnly: true, options: ['想再來參加下次聚會', '希望有人為我禱告', '先這樣就好，謝謝'] });
+    var members = S.data.people.filter(function (p) { return p.active && p.role === '組員'; }).map(function (p) { return p.id; });
+    return {
+      id: asNew ? null : src.id,
+      date: asNew ? nextDate() : src.date,
+      title: asNew ? '' : src.title,
+      verse: asNew ? '' : (src.verse || ''),
+      questions: qs.map(function (q) {
+        return { id: asNew ? null : q.id, text: asNew && !q.leaderOnly ? '' : q.text, options: asNew && !q.leaderOnly ? [] : q.options, optText: (asNew && !q.leaderOnly ? [] : q.options).join('\n'), max: q.max, leaderOnly: q.leaderOnly };
+      }),
+      attendees: asNew ? members : (src.attendees || []).slice()
+    };
+  }
+  function nextDate() {
+    var d = new Date(Date.now() + 8 * 3600 * 1000);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function viewPrep() {
+    var F = S.form || (S.form = formFrom(S.data.session));
+    var editing = F.id && S.data.sessions.filter(function (x) { return x.id === F.id; })[0];
+    var normal = F.questions.filter(function (q) { return !q.leaderOnly; });
+    var lock = F.questions.filter(function (q) { return q.leaderOnly; })[0];
+
+    function qEditor(q, idx) {
+      var maxSel = h('select', { style: 'width:auto', onchange: function () { q.max = +this.value; } },
+        [[0, '可複選不限'], [1, '只能選 1 個'], [2, '最多選 2 個'], [3, '最多選 3 個']].map(function (o) {
+          return h('option', { value: o[0], selected: (q.max || 0) === o[0] }, o[1]);
+        }));
+      return h('div.qedit' + (q.leaderOnly ? '.lock' : ''),
+        h('div.row', h('b.grow', q.leaderOnly ? '🔒 我的下一步（只有你看得到，不能公開）' : '第 ' + (idx + 1) + ' 題'),
+          q.leaderOnly ? null : h('button.btn.small.danger', { onclick: function () { F.questions.splice(F.questions.indexOf(q), 1); render(); } }, '刪除這題')),
+        h('label.field', h('span', '題目'), h('input', { type: 'text', value: q.text, maxLength: 200, placeholder: '例如：你做過最勇敢的事是什麼？', oninput: function () { q.text = this.value; } })),
+        h('label.field', h('span', '選項（一行一個；「其他，我想自己說…」會自動加在最後）'),
+          h('textarea', { rows: 6, value: q.optText, oninput: function () { q.optText = this.value; } })),
+        h('div.row', h('span.hint', '可選數量'), maxSel));
+    }
+
+    var pm = S.data.people.filter(function (p) { return p.active; });
+    var guestName = h('input', { type: 'text', placeholder: '新朋友的名字', maxLength: 30 });
+    function addGuest() {
+      var name = guestName.value.trim();
+      if (!name) return;
+      call('savePerson', { name: name, role: '新朋友' }).then(function (r) {
+        F.attendees.push(r.person.id);
+        UI.toast('已加入：' + name);
+        return load();
+      }).then(function () { S.tab = 'prep'; render(); }).catch(function (e) { UI.toast(e.message, true); });
+    }
+    guestName.addEventListener('keydown', function (e) { if (e.key === 'Enter') addGuest(); });
+
+    function checks(role) {
+      var list = pm.filter(function (p) { return p.role === role; });
+      if (!list.length) return h('p.faint', role === '組員' ? '名單還是空的，請到「組員名單」新增。' : '還沒有新朋友');
+      return h('div.checks', list.map(function (p) {
+        var on = F.attendees.indexOf(p.id) >= 0;
+        return h('label' + (on ? '.on' : ''), h('input', { type: 'checkbox', checked: on, onchange: function () {
+          var i = F.attendees.indexOf(p.id);
+          if (this.checked && i < 0) F.attendees.push(p.id);
+          if (!this.checked && i >= 0) F.attendees.splice(i, 1);
+          this.parentNode.classList.toggle('on', this.checked);
+        } }), p.name);
+      }));
+    }
+
+    function save(makeCurrent) {
+      var payload = {
+        id: F.id, date: F.date, title: F.title, verse: F.verse, makeCurrent: makeCurrent, attendees: F.attendees,
+        questions: F.questions.map(function (q) {
+          return { id: q.id, text: q.text, options: q.optText.split('\n'), max: q.max, leaderOnly: q.leaderOnly };
+        })
+      };
+      if (!payload.title.trim()) return UI.toast('請輸入聚會名稱', true);
+      if (payload.questions.some(function (q) { return !q.leaderOnly && !q.text.trim(); })) return UI.toast('有題目還沒填', true);
+      if (payload.questions.some(function (q) { return !q.options.join('').trim(); })) return UI.toast('每一題至少要有一個選項', true);
+      call('saveSession', { session: payload }).then(function (r) {
+        UI.toast(makeCurrent ? '已儲存，並設為本次聚會' : '已儲存');
+        S.selId = r.id;
+        return load().then(function () { S.form = formFrom(S.data.session); if (makeCurrent) S.tab = 'live'; render(); });
+      }).catch(function (e) { UI.toast(e.message, true); });
+    }
+
+    var answeredNote = editing && editing.answeredCount ? h('div.banner', '這場已有 ' + editing.answeredCount + ' 人作答。修改選項文字後，舊答案中被改掉的選項不會再被統計。') : null;
+
+    return h('div', { style: 'max-width:760px;margin:0 auto' },
+      h('div.row', { style: 'justify-content:space-between;margin:10px 0' },
+        h('h2', { style: 'margin:0' }, editing ? '編輯聚會' : '建立新聚會'),
+        h('div.btn-row',
+          editing ? h('button.btn.small.amber', { onclick: function () { S.form = formFrom(S.data.session, true); render(); } }, '＋ 建立下一次聚會') : null,
+          !editing && S.data.session ? h('button.btn.small.ghost', { onclick: function () { S.form = formFrom(S.data.session); render(); } }, '取消，回到目前聚會') : null)),
+      answeredNote,
+      h('div.card',
+        h('div.row',
+          h('label.field', { style: 'flex:0 0 180px' }, h('span', '日期'), h('input', { type: 'date', value: F.date, onchange: function () { F.date = this.value; } })),
+          h('label.field.grow', h('span', '聚會名稱（影片標題）'), h('input', { type: 'text', value: F.title, maxLength: 60, placeholder: '例如：啟發5 為何及如何禱告', oninput: function () { F.title = this.value; } }))),
+        h('label.field', h('span', '本週經文（作答完成後顯示，可留空；出處放在最後的括號內）'),
+          h('textarea', { rows: 2, value: F.verse, maxLength: 300, placeholder: '例如：凡勞苦擔重擔的人可以到我這裡來，我就使你們得安息。（馬太福音 11:28）', oninput: function () { F.verse = this.value; } }))),
+      h('div.card',
+        h('h3', '討論題目'),
+        normal.map(qEditor),
+        h('button.btn.small.ghost', { onclick: function () {
+          F.questions.splice(F.questions.indexOf(lock), 0, { id: null, text: '', options: [], optText: '', max: 2, leaderOnly: false });
+          render();
+        } }, '＋ 新增一題'),
+        lock ? qEditor(lock) : null),
+      h('div.card',
+        h('h3', '本次出席名單'),
+        h('p.hint', '組員作答時會看到這份名單，點自己的名字就能進入。'),
+        h('h3', { style: 'font-size:1rem;margin-top:12px' }, '組員'), checks('組員'),
+        h('h3', { style: 'font-size:1rem;margin-top:16px' }, '新朋友'), checks('新朋友'),
+        h('div.row', { style: 'margin-top:12px' }, h('div.grow', guestName), h('button.btn.small', { onclick: addGuest }, '＋ 加入新朋友'))),
+      h('div.btn-row', { style: 'justify-content:flex-end' },
+        h('button.btn.ghost', { onclick: function () { save(false); } }, '儲存'),
+        h('button.btn.amber', { onclick: function () { save(true); } }, '儲存並設為本次聚會')));
+  }
+
+  /* ---------- 組員名單 ---------- */
+  function viewPeople() {
+    var name = h('input', { type: 'text', placeholder: '名字', maxLength: 30 });
+    var role = h('select', { style: 'width:auto' }, h('option', '組員'), h('option', '新朋友'));
+    function add() {
+      if (!name.value.trim()) return;
+      act('savePerson', { name: name.value, role: role.value }, '已新增 ' + name.value.trim()).then(function () { S.tab = 'people'; render(); });
+    }
+    name.addEventListener('keydown', function (e) { if (e.key === 'Enter') add(); });
+    var list = S.data.people.slice().sort(function (a, b) { return (b.active - a.active) || (a.role === b.role ? 0 : a.role === '組員' ? -1 : 1); });
+    return h('div', { style: 'max-width:760px;margin:0 auto' },
+      h('div.card',
+        h('h3', '新增'),
+        h('div.row', h('div.grow', name), role, h('button.btn.small.amber', { onclick: add }, '新增')),
+        h('p.hint', '新朋友固定參加後，可以把身分改成「組員」。停用的人不會出現在新聚會的名單中，但歷次紀錄會保留。')),
+      h('div.card',
+        h('table.list', h('tr', h('th', '名字'), h('th', '身分'), h('th', '狀態'), h('th.opt', '')),
+          list.map(function (p) {
+            var nm = h('input', { type: 'text', value: p.name, maxLength: 30, style: 'max-width:180px' });
+            var rl = h('select', { style: 'width:auto' }, ['組員', '新朋友'].map(function (r) { return h('option', { selected: p.role === r }, r); }));
+            function upd(extra) {
+              var params = { id: p.id, name: nm.value, role: rl.value };
+              Object.keys(extra || {}).forEach(function (k) { params[k] = extra[k]; });
+              act('savePerson', params, '已更新').then(function () { S.tab = 'people'; render(); });
+            }
+            nm.addEventListener('change', function () { upd(); });
+            rl.addEventListener('change', function () { upd(); });
+            return h('tr', { style: p.active ? '' : 'opacity:.55' }, h('td', nm), h('td', rl),
+              h('td', p.active ? h('span.tag.olive', '使用中') : h('span.tag.gray', '已停用')),
+              h('td', h('button.btn.small.ghost', { onclick: function () { upd({ active: !p.active }); } }, p.active ? '停用' : '恢復')));
+          }))));
+  }
+
+  /* ---------- 歷次紀錄 ---------- */
+  function viewHistory() {
+    return h('div', { style: 'max-width:860px;margin:0 auto' },
+      h('div.card',
+        h('table.list', h('tr', h('th', '日期'), h('th', '聚會'), h('th.opt', '作答'), h('th', '')),
+          S.data.sessions.map(function (s) {
+            return h('tr',
+              h('td', s.date),
+              h('td', s.title, ' ', s.current ? h('span.tag.olive', '本次') : null),
+              h('td.opt', s.answeredCount + ' / ' + s.attendeeCount),
+              h('td', h('div.btn-row',
+                h('button.btn.small', { onclick: function () { S.selId = s.id; S.tab = 'live'; S.form = null; load(); } }, '查看'),
+                h('button.btn.small.ghost', { onclick: function () { S.selId = s.id; load().then(function () { S.form = formFrom(S.data.session); S.tab = 'prep'; render(); }); } }, '編輯'),
+                h('button.btn.small.danger', { onclick: function () {
+                  if (!confirm('確定刪除「' + s.title + '」和所有回答？刪除後無法復原。')) return;
+                  if (S.selId === s.id) S.selId = null;
+                  act('deleteSession', { id: s.id }, '已刪除');
+                } }, '刪除'))));
+          }))));
+  }
+
+  S.pw = getPw();
+  if (S.pw) start(); else renderLogin();
+})();
+</script>
+</body>
+</html>

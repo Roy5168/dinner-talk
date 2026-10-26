@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>晚餐分享・投影</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Noto+Sans+TC:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  body { font-size: clamp(16px, 1.45vw, 26px); }
+  .stage { display: grid; grid-template-columns: minmax(240px, 26%) 1fr; gap: 2.2em; padding: 2em 2.4em; min-height: 100vh; align-items: start; }
+  .side { position: sticky; top: 2em; text-align: center; }
+  .side .qr-box { background: #fff; padding: .8em; border-radius: 18px; box-shadow: var(--shadow); display: inline-block; }
+  .side .qr-box img, .side .qr-box canvas { width: 100% !important; height: auto !important; max-width: 280px; display: block; }
+  .side .count { font-family: var(--font-hand); font-size: 1.4em; margin-top: .6em; }
+  .main h1 { font-size: 2.4em; }
+  .main .q-text { font-size: 2em; line-height: 1.4; }
+  .main .bars { gap: .8em; }
+  .main .bar-row .label { font-size: 1.05em; }
+  .main .bar-track { height: .9em; border-radius: .45em; }
+  .main .quotes { grid-template-columns: repeat(auto-fill, minmax(16em, 1fr)); }
+  .main .quote { font-size: 1em; }
+  .pager { display: flex; gap: .5em; margin-top: 1em; flex-wrap: wrap; }
+  .pager button { border: 1.5px solid var(--line); background: var(--paper); border-radius: 999px; padding: .3em 1em; font-size: .85em; }
+  .pager button.on { background: var(--wood); color: #fff; border-color: var(--wood); }
+  .qlist { counter-reset: q; padding: 0; list-style: none; }
+  .qlist li { counter-increment: q; font-family: var(--font-hand); font-size: 1.6em; margin: .6em 0; padding-left: 2em; position: relative; }
+  .qlist li::before { content: counter(q); position: absolute; left: 0; top: .05em; width: 1.4em; height: 1.4em; border-radius: 50%; background: var(--amber); color: #fff; display: grid; place-items: center; font-size: .8em; }
+  @media (max-width: 760px) { .stage { grid-template-columns: 1fr; padding: 16px; } .side { position: static; } }
+</style>
+</head>
+<body>
+<div id="app"><p class="waiting" style="margin:2em">載入中<span class="dot-pulse"></span></p></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="config.js"></script>
+<script src="assets/api.js"></script>
+<script src="assets/common.js"></script>
+<script>
+(function () {
+  var h = UI.h, app = document.getElementById('app');
+  var S = { session: null, viewing: null, lastPublished: [] };
+  var qrBox = h('div.qr-box');
+  if (window.QRCode) new QRCode(qrBox, { text: UI.memberUrl(), width: 280, height: 280, colorDark: '#3d2b1f', colorLight: '#ffffff' });
+
+  function render() {
+    var s = S.session;
+    app.innerHTML = '';
+    if (!s) {
+      app.appendChild(h('div.wrap', h('div.hero', UI.scene(), h('h1', '晚餐分享')), h('p.waiting', '目前沒有進行中的聚會')));
+      return;
+    }
+    var pub = s.published.filter(function (id) { return s.results[id]; });
+    // 有新公開的題目時自動切過去
+    var fresh = pub.filter(function (id) { return S.lastPublished.indexOf(id) < 0; });
+    if (fresh.length) S.viewing = fresh[fresh.length - 1];
+    if (pub.indexOf(S.viewing) < 0) S.viewing = pub[pub.length - 1] || null;
+    S.lastPublished = pub;
+
+    var qs = s.questions.filter(function (q) { return !q.leaderOnly; });
+    var main;
+    if (S.viewing) {
+      var q = qs.filter(function (x) { return x.id === S.viewing; })[0];
+      main = h('div.main',
+        h('div.q-num', '第 ' + (qs.indexOf(q) + 1) + ' 題・大家的分享'),
+        h('h1.q-text', q.text),
+        h('div.card', UI.renderResult(q, s.results[q.id], { sort: true })),
+        pub.length > 1 ? h('div.pager', pub.map(function (id) {
+          var i = qs.findIndex(function (x) { return x.id === id; });
+          return h('button' + (id === S.viewing ? '.on' : ''), { onclick: function () { S.viewing = id; render(); } }, '第 ' + (i + 1) + ' 題');
+        })) : null);
+    } else {
+      main = h('div.main',
+        h('div.hero', { style: 'text-align:left' }, h('div.eyebrow', '今晚的晚餐分享'), h('h1', s.title), h('div.date', UI.fmtDate(s.date))),
+        h('div.card', h('h2', '今晚我們一起聊聊'), h('ol.qlist', qs.map(function (x) { return h('li', x.text); }))),
+        h('p.muted', '用手機掃描左邊的 QR Code，點自己的名字就可以開始作答。'));
+    }
+    app.appendChild(h('div.stage',
+      h('div.side', UI.scene(), qrBox, h('p.hint', '掃描開始作答'),
+        h('div.count', '已作答 ' + s.answeredIds.length + ' / ' + s.attendees.length),
+        API.demo ? h('p.faint', '展示模式') : null),
+      main));
+  }
+
+  UI.poll(function () {
+    return API.call('current').then(function (r) { S.session = r.session; render(); }).catch(function (e) { UI.toast(e.message, true); });
+  }, 4000);
+})();
+</script>
+</body>
+</html>

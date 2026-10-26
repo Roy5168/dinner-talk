@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>晚餐分享</title>
+<meta name="theme-color" content="#f5ede0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Noto+Sans+TC:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<main class="wrap" id="app"><p class="waiting">載入中<span class="dot-pulse"></span></p></main>
+<script src="config.js"></script>
+<script src="assets/api.js"></script>
+<script src="assets/common.js"></script>
+<script>
+(function () {
+  var h = UI.h, app = document.getElementById('app');
+  var ME_KEY = 'dinnertalk-me', TOKENS_KEY = 'dinnertalk-tokens';
+  var S = { session: null, me: null, draft: {}, step: 0, view: 'loading', submitted: false };
+
+  function store(key, val) {
+    try { if (val === undefined) return JSON.parse(localStorage.getItem(key) || 'null'); localStorage.setItem(key, JSON.stringify(val)); } catch (e) { return null; }
+  }
+  function draftKey() { return 'dinnertalk-draft-' + S.session.id + '-' + S.me.id; }
+  function saveDraft() { store(draftKey(), S.draft); }
+  function questions() { return S.session.questions; }
+
+  function render() {
+    app.innerHTML = '';
+    app.appendChild(UI.demoBanner(API.demo ? h('button.link', { onclick: function () { window.open('leader.html?demo', '_blank'); } }, '開啟組長後台') : null) || h('span'));
+    var fn = { loading: viewLoading, none: viewNone, pick: viewPick, question: viewQuestion, done: viewDone }[S.view];
+    app.appendChild(fn());
+    var key = S.view + S.step;
+    if (key !== render.last) window.scrollTo(0, 0);   // 只有換頁才捲回頂端，背景更新不打斷閱讀
+    render.last = key;
+  }
+
+  function viewLoading() { return h('p.waiting', '載入中', h('span.dot-pulse')); }
+
+  function viewNone() {
+    return h('div', h('div.hero', UI.scene(), h('h1', '晚餐分享')),
+      h('p.waiting', '目前沒有進行中的聚會，請稍候小組長開始', h('span.dot-pulse')));
+  }
+
+  function viewPick() {
+    var s = S.session;
+    var groups = [['組員', '小組成員'], ['新朋友', '新朋友']];
+    return h('div',
+      h('div.hero', UI.scene(), h('div.eyebrow', '今晚的晚餐分享'), h('h1', s.title), h('div.date', UI.fmtDate(s.date))),
+      h('div.card',
+        h('h2', '歡迎！請點你的名字'),
+        groups.map(function (g) {
+          var list = s.attendees.filter(function (a) { return (a.role === '新朋友') === (g[0] === '新朋友'); });
+          if (!list.length) return null;
+          return h('div.name-group', h('h3', g[1]), h('div.names', list.map(function (a) {
+            var done = s.answeredIds.indexOf(a.id) >= 0;
+            return h('button.name-btn', { onclick: function () { confirmMe(a); } }, a.name, done ? h('span.tick', '✓ 已作答') : null);
+          })));
+        }),
+        h('p.hint', '名單上沒有你的名字？請告訴小組長。')));
+  }
+
+  function confirmMe(a) {
+    var back = h('div.modal-back', { onclick: function (e) { if (e.target === back) back.remove(); } },
+      h('div.modal',
+        h('h2', '你是「' + a.name + '」嗎？'),
+        h('div.btn-row', { style: 'justify-content:center;margin-top:14px' },
+          h('button.btn.ghost', { onclick: function () { back.remove(); } }, '不是'),
+          h('button.btn.amber', { onclick: function () { back.remove(); login(a); } }, '是我，開始'))));
+    document.body.appendChild(back);
+  }
+
+  // 作答通行碼另外存，切換名字時不會遺失（同一支手機可能幫兩個人作答）
+  function tokenKey() { return S.session.id + ':' + S.me.id; }
+  function myToken() { return (store(TOKENS_KEY) || {})[tokenKey()] || ''; }
+  function saveToken(t) { var all = store(TOKENS_KEY) || {}; all[tokenKey()] = t; store(TOKENS_KEY, all); }
+
+  function login(a) {
+    S.me = a;
+    var token = myToken();
+    store(ME_KEY, { sessionId: S.session.id, personId: a.id });
+    S.view = 'loading'; render();
+    API.call('myAnswer', { sessionId: S.session.id, personId: a.id, token: token }).then(function (r) {
+      if (r.taken) {
+        UI.toast('「' + a.name + '」已經有人作答了。如果是你本人，請用原本那支手機，或請小組長協助', true);
+        return switchUser();
+      }
+      var local = store(draftKey());
+      S.draft = r.answers || local || {};
+      S.submitted = !!r.answers;
+      S.step = 0;
+      S.view = r.answers ? 'done' : 'question';
+      render();
+    }).catch(fail);
+  }
+
+  function entry(q) {
+    var e = S.draft[q.id];
+    if (!e) e = S.draft[q.id] = { choices: [], other: '', note: '' };
+    if (e.showOther === undefined) e.showOther = !!e.other;
+    return e;
+  }
+
+  function viewQuestion() {
+    var qs = questions(), q = qs[S.step], e = entry(q);
+    var otherBox = h('textarea', { placeholder: '想怎麼說都可以…', maxLength: 300, value: e.other, oninput: function () { e.other = this.value; saveDraft(); } });
+    var noteBox = h('textarea', { placeholder: '想多說一點的話，可以寫在這裡（選填）', maxLength: 500, value: e.note, oninput: function () { e.note = this.value; saveDraft(); } });
+    var noteWrap = h('div' + (e.note || e.showNote ? '' : '.hidden'), h('label.field', h('span', '想多說一點'), noteBox));
+    var otherWrap = h('div' + (e.showOther ? '' : '.hidden'), otherBox);
+    var chips = h('div.chips');
+
+    function drawChips() {
+      chips.innerHTML = '';
+      q.options.forEach(function (o) {
+        var on = e.choices.indexOf(o) >= 0;
+        chips.appendChild(h('button.chip' + (on ? '.on' : ''), { type: 'button', onclick: function () { toggle(o); } }, h('span.box', '✓'), h('span', o)));
+      });
+      chips.appendChild(h('button.chip.other' + (e.showOther ? '.on' : ''), { type: 'button', onclick: toggleOther }, h('span.box', '✓'), h('span', '其他，我想自己說…')));
+    }
+    function used() { return e.choices.length + (e.showOther ? 1 : 0); }
+    function full() {
+      if (q.max && used() >= q.max) { UI.toast('這題最多選 ' + q.max + ' 個，可以先取消一個'); return true; }
+      return false;
+    }
+    function toggle(o) {
+      var i = e.choices.indexOf(o);
+      if (i >= 0) e.choices.splice(i, 1); else if (!full()) e.choices.push(o);
+      saveDraft(); drawChips();
+    }
+    function toggleOther() {
+      if (e.showOther) { e.showOther = false; e.other = ''; otherBox.value = ''; }
+      else if (!full()) { e.showOther = true; setTimeout(function () { otherBox.focus(); }, 30); }
+      otherWrap.classList.toggle('hidden', !e.showOther);
+      saveDraft(); drawChips();
+    }
+    drawChips();
+
+    var last = S.step === qs.length - 1;
+    var isEmpty = function () { return !e.choices.length && !e.other.trim() && !e.note.trim(); };
+    var nextBtn = h('button.btn.amber', { onclick: function () {
+      if (last) return submit();
+      S.step++; render();
+    } }, last ? '送出' : '下一題');
+    var publicCount = qs.filter(function (x) { return !x.leaderOnly; }).length;
+    var num = q.leaderOnly ? '最後一題' : '第 ' + (S.step + 1) + ' 題 / 共 ' + publicCount + ' 題';
+
+    return h('div',
+      h('div.progress', qs.map(function (x, i) { return h('span' + (i === S.step ? '.on' : i < S.step ? '.done' : '')); })),
+      h('div.card',
+        h('div.q-num', num),
+        h('h2.q-text', q.text),
+        q.leaderOnly ? h('div.lock-note', '🔒 這題只有小組長看得到，不會公開') : h('p.hint', q.max ? '可以選 1～' + q.max + ' 個' : '可以複選'),
+        chips, otherWrap,
+        q.leaderOnly ? null : h('button.link' + (e.note || e.showNote ? '.hidden' : ''), { onclick: function () { e.showNote = true; this.classList.add('hidden'); noteWrap.classList.remove('hidden'); noteBox.focus(); } }, '＋ 想多說一點'),
+        q.leaderOnly ? null : noteWrap),
+      h('div.btn-row.spread',
+        S.step > 0 ? h('button.btn.ghost', { onclick: function () { S.step--; render(); } }, '上一題') : h('button.btn.ghost', { onclick: switchUser }, '不是' + S.me.name + '？'),
+        nextBtn),
+      h('p.faint', { style: 'text-align:right' }, isEmpty() && !last ? '沒有想法也可以先跳過' : ''));
+  }
+
+  function submit() {
+    var payload = {};
+    questions().forEach(function (q) {
+      var e = entry(q);
+      payload[q.id] = { choices: e.choices, other: e.showOther ? e.other : '', note: e.note };
+    });
+    S.view = 'loading'; render();
+    API.call('submit', { sessionId: S.session.id, personId: S.me.id, answers: payload, token: myToken() }).then(function (r) {
+      saveToken(r.token);
+      S.submitted = true; S.view = 'done';
+      UI.toast('已送出，謝謝你的分享！');
+      refresh();
+    }).catch(function (err) { S.view = 'question'; render(); UI.toast(err.message, true); });
+  }
+
+  function viewDone() {
+    var s = S.session;
+    var qs = s.questions.filter(function (q) { return !q.leaderOnly; });
+    return h('div',
+      h('div.hero', UI.scene(), h('div.eyebrow', s.title), h('h1', '謝謝你，' + S.me.name)),
+      s.verse ? h('div.card.soft', h('div.verse', s.verse.replace(/（[^（）]*）$/, ''), h('small', (s.verse.match(/（([^（）]*)）$/) || [])[1] || ''))) : null,
+      h('h2', { style: 'margin-top:24px' }, '大家的分享'),
+      h('p.hint', '小組長公開後，大家的回答會出現在這裡（不顯示姓名）。'),
+      qs.map(function (q, i) {
+        var res = s.results[q.id];
+        return h('div.card', h('div.q-num', '第 ' + (i + 1) + ' 題'), h('h3', q.text),
+          res ? UI.renderResult(q, res, { sort: true }) : h('p.waiting', '小組長還沒公開這一題'));
+      }),
+      h('div.btn-row', { style: 'justify-content:center;margin-top:8px' },
+        h('button.btn.ghost', { onclick: function () { S.step = 0; S.view = 'question'; render(); } }, '修改我的回答'),
+        h('button.link', { onclick: switchUser }, '我不是' + S.me.name)),
+      h('p.footer', '已作答 ' + s.answeredIds.length + ' / ' + s.attendees.length + ' 人'));
+  }
+
+  function switchUser() {
+    S.me = null; S.draft = {}; store(ME_KEY, null);
+    S.view = 'pick'; render();
+  }
+
+  function fail(err) {
+    UI.toast(err.message || '連線失敗', true);
+    if (!S.session) {
+      app.innerHTML = '';
+      app.appendChild(h('p.waiting', '暫時連不上，請檢查網路後重新整理頁面（' + (err.message || '連線失敗') + '）'));
+    }
+  }
+
+  // 背景更新：作答中不重畫畫面，以免打斷輸入
+  function refresh() {
+    return API.call('current').then(function (r) {
+      var s = r.session, prev = S.session;
+      S.session = s;
+      if (!s) { S.view = 'none'; S.me = null; return render(); }
+      if (!prev || prev.id !== s.id) {
+        var saved = store(ME_KEY);
+        var me = saved && saved.sessionId === s.id && s.attendees.filter(function (a) { return a.id === saved.personId; })[0];
+        if (me) return login(me);
+        S.me = null; S.view = 'pick'; return render();
+      }
+      if (S.me && !s.attendees.some(function (a) { return a.id === S.me.id; })) { S.me = null; S.view = 'pick'; return render(); }
+      if (S.view === 'pick' || S.view === 'done' || S.view === 'none' || S.view === 'loading') render();
+    }).catch(fail);
+  }
+
+  UI.poll(refresh, 5000);
+})();
+</script>
+</body>
+</html>
