@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Noto+Sans+TC:wght@400;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="assets/style.css?v=20261028">
 <style>
   .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 8px 0; }
   .topbar .brand { display: flex; align-items: center; gap: 10px; }
@@ -52,9 +52,9 @@
 <body>
 <main class="wrap wide" id="app"><p class="waiting">載入中<span class="dot-pulse"></span></p></main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="config.js"></script>
-<script src="assets/api.js"></script>
-<script src="assets/common.js"></script>
+<script src="config.js?v=20261028"></script>
+<script src="assets/api.js?v=20261028"></script>
+<script src="assets/common.js?v=20261028"></script>
 <script>
 (function () {
   var h = UI.h, app = document.getElementById('app');
@@ -115,9 +115,10 @@
     var d = S.data;
     app.innerHTML = '';
     var tabs = [['live', '即時回答'], ['prep', '準備聚會'], ['people', '組員名單'], ['history', '歷次紀錄']];
-    app.appendChild(UI.demoBanner(h('div.btn-row',
+    var banner = UI.demoBanner(h('div.btn-row',
       h('button.btn.small.ghost', { onclick: function () { API.demoFill().then(function () { UI.toast('已替未作答的人填入示範回答'); load(); }); } }, '填入示範回答'),
-      h('button.btn.small.ghost', { onclick: function () { if (confirm('清除所有展示資料？')) { API.demoReset(); location.reload(); } } }, '重設展示資料'))));
+      h('button.btn.small.ghost', { onclick: function () { if (confirm('清除所有展示資料？')) { API.demoReset(); location.reload(); } } }, '重設展示資料')));
+    if (banner) app.appendChild(banner);   // 正式模式沒有展示提示，appendChild(null) 會讓整頁空白
     app.appendChild(h('div.topbar',
       h('div.brand', UI.scene(), h('div', h('div.hand', { style: 'font-size:1.3rem' }, '小組長後台'), h('div.faint', d.session ? d.session.title : ''))),
       h('div.tabs', tabs.map(function (t) {

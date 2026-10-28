@@ -6,7 +6,8 @@
     var el = document.createElement(parts[0] || 'div');
     if (parts.length > 1) el.className = parts.slice(1).join(' ');
     var kids = Array.prototype.slice.call(arguments, 2);
-    if (attrs && (typeof attrs !== 'object' || attrs.nodeType || Array.isArray(attrs))) { kids.unshift(attrs); attrs = null; }
+    // 第二個參數不是屬性物件時當成子元素（包含數字 0，不能用 truthy 判斷）
+    if (attrs != null && (typeof attrs !== 'object' || attrs.nodeType || Array.isArray(attrs))) { kids.unshift(attrs); attrs = null; }
     if (attrs) Object.keys(attrs).forEach(function (k) {
       var v = attrs[k];
       if (v == null || v === false) return;
