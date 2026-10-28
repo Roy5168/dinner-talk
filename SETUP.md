@@ -15,7 +15,27 @@
 
 ---
 
-## 一、第一次設定（約 15 分鐘，只要做一次）
+## 一、第一次設定（一鍵部署，已完成）
+
+後端已在 2026-10-28 用一鍵腳本部署完成：
+- 試算表「晚餐分享資料」在你的 Google 雲端硬碟
+- 網址已寫入 `config.js`
+
+一鍵腳本 `tools/deploy-backend.sh` 會自動：建立試算表與 Apps Script、放入組長密碼、上傳 `Code.gs`、部署網頁應用程式、把網址寫進 `config.js`。
+
+```bash
+./tools/deploy-backend.sh
+```
+
+- 第一次執行前要到 https://script.google.com/home/usersettings 開啟「Google Apps Script API」。
+- 腳本會請你登入 Google、在終端機設定組長密碼（密碼存在本機 `.deploy/password`，不會推上 GitHub）。
+- 部署完成後，用瀏覽器打開後端網址並按「允許」授權一次。
+- **之後改了 `Code.gs`，再執行一次腳本即可**，網址不變；執行完記得把變動推上 GitHub。
+- **改組長密碼**：刪除 `.deploy/password` 後再執行一次腳本。
+- `.deploy/` 資料夾記錄了試算表與部署的編號，請不要刪除，否則腳本會建立一份新的試算表。
+
+<details><summary>手動設定方式（不用腳本時）</summary>
+
 
 ### 1. 建立 Google 試算表
 1. 用**個人 Gmail 帳號**開一份新的 Google 試算表，取名例如「晚餐分享資料」。
@@ -59,6 +79,8 @@ GitHub 上的 repo → Settings → Pages → Source 選「Deploy from a branch�
 
 ---
 
+</details>
+
 ## 二、每週使用流程
 
 **聚會前（組長後台 →「準備聚會」）**
@@ -89,11 +111,11 @@ GitHub 上的 repo → Settings → Pages → Source 選「Deploy from a branch�
 ## 三、常見問題
 
 **改了 Apps Script 程式，網站沒變？**
-Apps Script 每次改程式都要發布新版本，否則網址會繼續跑舊程式：
+用一鍵腳本的話再執行一次 `./tools/deploy-backend.sh` 就好。手動設定的話，每次改程式都要發布新版本，否則網址會繼續跑舊程式：
 「部署 → 管理部署作業 → 鉛筆圖示 → 版本選『新版本』→ 部署」。網址不會變，不用改 `config.js`。
 
 **改組長密碼？**
-在 Apps Script 改 `LEADER_PASSWORD`，再照上面的方法發布新版本。
+刪除 `.deploy/password` 後執行 `./tools/deploy-backend.sh`，會請你輸入新密碼。
 
 **有人點錯名字？**
 作答完的頁面下方有「我不是○○」，可以重新選。作答期間也可以按「修改我的回答」。
@@ -121,3 +143,5 @@ Apps Script 每次改程式都要發布新版本，否則網址會繼續跑舊�
 | `config.js` | Apps Script 網址設定 |
 | `assets/` | 共用樣式與程式（`api.js` 負責連線，展示模式也在這裡） |
 | `apps-script/Code.gs` | 後端程式（貼到 Google Apps Script；展示模式也直接執行這份） |
+| `apps-script/appsscript.json` | Apps Script 設定（權限只限這份試算表、任何人可作答） |
+| `tools/deploy-backend.sh` | 一鍵部署／更新後端 |
