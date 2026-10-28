@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Noto+Sans+TC:wght@400;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/style.css?v=20261028">
+<link rel="stylesheet" href="assets/style.css?v=20261028b">
 <style>
   .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 8px 0; }
   .topbar .brand { display: flex; align-items: center; gap: 10px; }
@@ -52,9 +52,9 @@
 <body>
 <main class="wrap wide" id="app"><p class="waiting">載入中<span class="dot-pulse"></span></p></main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="config.js?v=20261028"></script>
-<script src="assets/api.js?v=20261028"></script>
-<script src="assets/common.js?v=20261028"></script>
+<script src="config.js?v=20261028b"></script>
+<script src="assets/api.js?v=20261028b"></script>
+<script src="assets/common.js?v=20261028b"></script>
 <script>
 (function () {
   var h = UI.h, app = document.getElementById('app');
@@ -68,14 +68,24 @@
   function call(action, params) {
     params = params || {};
     params.pw = S.pw;
-    return API.call(action, params).catch(function (err) {
+    if (params.viewId === undefined) params.viewId = S.selId;
+    return API.call(action, params).then(function (r) {
+      if (r.admin) apply(r.admin);   // 寫入後後端直接附上最新資料
+      return r;
+    }).catch(function (err) {
       if (/密碼/.test(err.message)) { setPw(null); S.pw = null; if (poller) poller.stop(); renderLogin(err.message); }
       throw err;
     });
   }
   function act(action, params, msg) {
-    return call(action, params).then(function (r) { if (msg) UI.toast(msg); return load().then(function () { return r; }); })
-      .catch(function (err) { UI.toast(err.message, true); throw err; });
+    UI.toast('處理中…');
+    return call(action, params).then(function (r) { if (msg) UI.toast(msg); render(); return r; })
+      .catch(function (err) { UI.toast(err.message, true); render(); throw err; });
+  }
+  function apply(r) {
+    S.data = r;
+    if (r.session) S.selId = r.session.id;
+    if (poller) poller.seen(r.version);
   }
 
   /* ---------- 登入 ---------- */
@@ -84,7 +94,8 @@
     var pw = h('input', { type: 'password', placeholder: '小組長密碼', autocomplete: 'current-password' });
     function go() {
       S.pw = pw.value;
-      call('login').then(function () { setPw(S.pw); start(); }).catch(function (e) { UI.toast(e.message, true); });
+      UI.toast('登入中…');
+      call('login').then(function (r) { setPw(S.pw); start(r.admin); }).catch(function (e) { UI.toast(e.message, true); });
     }
     pw.addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); });
     app.appendChild(h('div', { style: 'max-width:420px;margin:0 auto' },
@@ -95,18 +106,18 @@
     pw.focus();
   }
 
-  function start() {
-    app.innerHTML = '<p class="waiting">載入中<span class="dot-pulse"></span></p>';
+  function start(initial) {
     if (poller) poller.stop();
-    poller = UI.poll(function () { return load(true); }, 5000);
+    if (initial) render(); else app.innerHTML = '<p class="waiting">載入中<span class="dot-pulse"></span></p>';
+    poller = UI.poll(function () { return load(true); }, 5000, initial ? initial.version : null);
   }
 
   function load(fromPoll) {
     return call('admin', { sessionId: S.selId }).then(function (r) {
-      S.data = r;
-      if (r.session) S.selId = r.session.id;
+      apply(r);
       // 編輯中的表單與名單不在背景更新時重畫，避免打斷輸入
       if (!fromPoll || S.tab === 'live' || S.tab === 'history' || !app.querySelector('.tabs')) render();
+      return r.version;
     }).catch(function () { /* 已在 call 處理 */ });
   }
 
@@ -165,11 +176,20 @@
           h('div', h('div.q-num', q.leaderOnly ? '🔒 只有你看得到' : '第 ' + (i + 1) + ' 題'), h('h3', q.text)),
           q.leaderOnly ? null : h('button.switch' + (on ? '.on' : ''), {
             title: on ? '目前大家看得到這題的統計與分享（不顯示姓名）' : '公開後，大家的手機和投影畫面會看到這題的統計與分享（不顯示姓名）',
-            onclick: function () { act('setPublished', { id: s.id, qid: q.id, on: !on }, on ? '已取消公開' : '已公開，大家看得到了'); }
+            onclick: function () {
+              s.published = on ? s.published.filter(function (x) { return x !== q.id; }) : s.published.concat([q.id]);
+              render();
+              act('setPublished', { id: s.id, qid: q.id, on: !on }, on ? '已取消公開' : '已公開，大家看得到了');
+            }
           }, h('i'), on ? '已公開' : '公開這題')),
         UI.renderResult(q, s.results[q.id], {
           admin: true,
-          onHide: function (t) { act('setHidden', { id: s.id, key: t.key, on: !t.hidden }, t.hidden ? '已恢復公開' : '這則不會公開'); }
+          onHide: function (t) {
+            var was = t.hidden;
+            t.hidden = !was;
+            render();
+            act('setHidden', { id: s.id, key: t.key, on: !was }, was ? '已恢復公開' : '這則不會公開');
+          }
         }));
     })) : h('div.grid2', s.attendees.map(function (id) {
       var p = pm[id] || { name: '（已刪除）' };
@@ -291,11 +311,12 @@
     function addGuest() {
       var name = guestName.value.trim();
       if (!name) return;
+      UI.toast('加入中…');
       call('savePerson', { name: name, role: '新朋友' }).then(function (r) {
         F.attendees.push(r.person.id);
         UI.toast('已加入：' + name);
-        return load();
-      }).then(function () { S.tab = 'prep'; render(); }).catch(function (e) { UI.toast(e.message, true); });
+        S.tab = 'prep'; render();
+      }).catch(function (e) { UI.toast(e.message, true); });
     }
     guestName.addEventListener('keydown', function (e) { if (e.key === 'Enter') addGuest(); });
 
@@ -323,10 +344,11 @@
       if (!payload.title.trim()) return UI.toast('請輸入聚會名稱', true);
       if (payload.questions.some(function (q) { return !q.leaderOnly && !q.text.trim(); })) return UI.toast('有題目還沒填', true);
       if (payload.questions.some(function (q) { return !q.options.join('').trim(); })) return UI.toast('每一題至少要有一個選項', true);
+      UI.toast('儲存中…');
       call('saveSession', { session: payload }).then(function (r) {
         UI.toast(makeCurrent ? '已儲存，並設為本次聚會' : '已儲存');
         S.selId = r.id;
-        return load().then(function () { S.form = formFrom(S.data.session); if (makeCurrent) S.tab = 'live'; render(); });
+        S.form = formFrom(S.data.session); if (makeCurrent) S.tab = 'live'; render();
       }).catch(function (e) { UI.toast(e.message, true); });
     }
 

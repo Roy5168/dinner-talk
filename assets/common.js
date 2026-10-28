@@ -40,23 +40,25 @@
   }
 
   // 定時檢查版本號，有變動才抓完整資料（省 Apps Script 配額）
-  function poll(onChange, interval) {
-    var last = null, timer = null, stopped = false;
-    function tick() {
-      API.call('state').then(function (r) {
-        if (r.version !== last) { last = r.version; return onChange(); }
-      }).catch(function (err) {
-        // 第一次就連不上時，讓頁面自己抓一次，好把錯誤顯示出來而不是一直停在「載入中」
-        if (last === null) return onChange();
-      })
-        .then(function () {
-          if (!stopped) timer = setTimeout(tick, document.hidden ? interval * 3 : interval);
-        });
+  // onChange 回傳（Promise 的）版本號。第一次直接抓完整資料，不先問版本，省一趟一兩秒的往返
+  function poll(onChange, interval, initialVersion) {
+    var last = initialVersion == null ? null : initialVersion, timer = null, stopped = false;
+    function fetchAll() {
+      return Promise.resolve(onChange()).then(function (v) { if (v != null) last = v; });
     }
-    tick();
+    function tick() {
+      var job = last === null ? fetchAll() : API.call('state').then(function (r) {
+        if (r.version !== last) { last = r.version; return fetchAll(); }
+      });
+      job.catch(function () { /* 暫時斷線就等下一輪 */ }).then(function () {
+        if (!stopped) timer = setTimeout(tick, document.hidden ? interval * 3 : interval);
+      });
+    }
+    if (last === null) tick(); else timer = setTimeout(tick, interval);
     return {
       refresh: function () { clearTimeout(timer); last = null; tick(); },
-      stop: function () { stopped = true; clearTimeout(timer); }
+      stop: function () { stopped = true; clearTimeout(timer); },
+      seen: function (v) { if (v != null) last = v; }   // 自己寫入後已拿到最新資料，不必再抓一次
     };
   }
 

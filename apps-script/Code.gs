@@ -63,7 +63,10 @@ function handle_(action, p, store) {
     fn = ADMIN_[action];
     if (!fn) throw new Error('未知的操作：' + action);
     checkPassword_(p.pw, store);
-    return ok_(fn(p, store));
+    var res = fn(p, store);
+    // 每次往返 Apps Script 都要一兩秒，所以寫入後直接附上最新後台資料，省掉前端再問一次
+    if (action !== 'admin') res.admin = ADMIN_.admin({ sessionId: res.id || p.viewId }, store);   // 新建聚會時直接顯示新的那場
+    return ok_(res);
   } catch (err) {
     return { ok: false, error: String(err && err.message || err) };
   }
@@ -101,7 +104,7 @@ var PUBLIC_ = {
       row.updatedAt = new Date().toISOString();
       store.write('answers', rows);
       store.bump();
-      return { saved: true, token: row.token };
+      return { saved: true, token: row.token, session: publicView_(s, store), version: store.getVersion() };
     });
   }
 };
@@ -414,6 +417,9 @@ function sheetStore_() {
   return {
     read: function (name) {
       if (cache[name]) return JSON.parse(JSON.stringify(cache[name]));
+      // 先找快取，省下讀試算表的時間；手動改試算表最多 5 分鐘後生效
+      var hit = CacheService.getScriptCache().get('tbl:' + name);
+      if (hit) { cache[name] = JSON.parse(hit); return JSON.parse(hit); }
       var cols = SCHEMA[name];
       var values = sheetOf(name).getDataRange().getValues().slice(1);
       var rows = values.filter(function (v) { return v[0] !== ''; }).map(function (v) {
@@ -428,6 +434,7 @@ function sheetStore_() {
         return o;
       });
       cache[name] = rows;
+      putTable_(name, rows);
       return JSON.parse(JSON.stringify(rows));
     },
     write: function (name, rows) {
@@ -445,6 +452,7 @@ function sheetStore_() {
       if (last > 1) sh.getRange(2, 1, last - 1, cols.length).clearContent();
       if (data.length) sh.getRange(2, 1, data.length, cols.length).setNumberFormat('@').setValues(data);
       cache[name] = JSON.parse(JSON.stringify(rows));
+      putTable_(name, rows);
     },
     getVersion: function () {
       var v = CacheService.getScriptCache().get('version');
@@ -465,6 +473,12 @@ function sheetStore_() {
       try { cache = {}; return fn(); } finally { lock.releaseLock(); }
     }
   };
+}
+
+function putTable_(name, rows) {
+  var json = JSON.stringify(rows);
+  var c = CacheService.getScriptCache();
+  if (json.length < 90000) c.put('tbl:' + name, json, 300); else c.remove('tbl:' + name);   // 快取單筆上限約 100KB
 }
 
 function doPost(e) {

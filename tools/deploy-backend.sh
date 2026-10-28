@@ -52,6 +52,7 @@ cp "$ROOT/apps-script/appsscript.json" "$DEPLOY/appsscript.json"
 $CLASP push -f
 if [ -s deployment-id ]; then
   $CLASP deploy -i "$(cat deployment-id)" -d "更新 $(date '+%Y-%m-%d %H:%M')"
+  UPDATED=1
 else
   OUT=$($CLASP deploy -d "第一版")
   echo "$OUT"
@@ -72,6 +73,7 @@ PY
 SHEET=$(python3 -c "import json;print(json.load(open('.clasp.json')).get('parentId',[''])[0] if isinstance(json.load(open('.clasp.json')).get('parentId'),list) else json.load(open('.clasp.json')).get('parentId',''))" 2>/dev/null || true)
 echo
 echo "完成！後端網址：$URL"
+if [ -n "$UPDATED" ]; then echo "（更新既有部署，網址不變，不需要再授權）"; exit 0; fi
 [ -n "$SHEET" ] && echo "試算表：https://docs.google.com/spreadsheets/d/$SHEET/edit"
 echo
 echo "最後一步：瀏覽器會打開後端網址，請按「審查權限 → 選帳號 → 進階 → 前往（不安全）→ 允許」。"

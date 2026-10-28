@@ -8,13 +8,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Noto+Sans+TC:wght@400;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/style.css?v=20261028">
+<link rel="stylesheet" href="assets/style.css?v=20261028b">
 </head>
 <body>
 <main class="wrap" id="app"><p class="waiting">載入中<span class="dot-pulse"></span></p></main>
-<script src="config.js?v=20261028"></script>
-<script src="assets/api.js?v=20261028"></script>
-<script src="assets/common.js?v=20261028"></script>
+<script src="config.js?v=20261028b"></script>
+<script src="assets/api.js?v=20261028b"></script>
+<script src="assets/common.js?v=20261028b"></script>
 <script>
 (function () {
   var h = UI.h, app = document.getElementById('app');
@@ -82,6 +82,15 @@
     S.me = a;
     var token = myToken();
     store(ME_KEY, { sessionId: S.session.id, personId: a.id });
+    if (!token) {
+      // 這支手機沒作答過這個名字：不必問後端，直接判斷，省一趟往返
+      if (S.session.answeredIds.indexOf(a.id) >= 0) {
+        UI.toast('「' + a.name + '」已經有人作答了。如果是你本人，請用原本那支手機，或請小組長協助', true);
+        return switchUser();
+      }
+      S.draft = store(draftKey()) || {}; S.submitted = false; S.step = 0; S.view = 'question';
+      return render();
+    }
     S.view = 'loading'; render();
     API.call('myAnswer', { sessionId: S.session.id, personId: a.id, token: token }).then(function (r) {
       if (r.taken) {
@@ -173,7 +182,8 @@
       saveToken(r.token);
       S.submitted = true; S.view = 'done';
       UI.toast('已送出，謝謝你的分享！');
-      refresh();
+      poller.seen(r.version);
+      applySession(r.session);   // 送出時後端已附上最新資料
     }).catch(function (err) { S.view = 'question'; render(); UI.toast(err.message, true); });
   }
 
@@ -215,22 +225,24 @@
 
   // 背景更新：作答中不重畫畫面，以免打斷輸入
   function refresh() {
-    return API.call('current').then(function (r) {
-      var s = r.session, prev = S.session;
-      S.session = s;
-      if (!s) { S.view = 'none'; S.me = null; return render(); }
-      if (!prev || prev.id !== s.id) {
-        var saved = store(ME_KEY);
-        var me = saved && saved.sessionId === s.id && s.attendees.filter(function (a) { return a.id === saved.personId; })[0];
-        if (me) return login(me);
-        S.me = null; S.view = 'pick'; return render();
-      }
-      if (S.me && !s.attendees.some(function (a) { return a.id === S.me.id; })) { S.me = null; S.view = 'pick'; return render(); }
-      if (S.view === 'pick' || S.view === 'done' || S.view === 'none' || S.view === 'loading') render();
-    }).catch(fail);
+    return API.call('current').then(function (r) { applySession(r.session); return r.version; }).catch(fail);
   }
 
-  UI.poll(refresh, 5000);
+  function applySession(s) {
+    var prev = S.session;
+    S.session = s;
+    if (!s) { S.view = 'none'; S.me = null; return render(); }
+    if (!prev || prev.id !== s.id) {
+      var saved = store(ME_KEY);
+      var me = saved && saved.sessionId === s.id && s.attendees.filter(function (a) { return a.id === saved.personId; })[0];
+      if (me) return login(me);
+      S.me = null; S.view = 'pick'; return render();
+    }
+    if (S.me && !s.attendees.some(function (a) { return a.id === S.me.id; })) { S.me = null; S.view = 'pick'; return render(); }
+    if (S.view === 'pick' || S.view === 'done' || S.view === 'none' || S.view === 'loading') render();
+  }
+
+  var poller = UI.poll(refresh, 5000);
 })();
 </script>
 </body>
