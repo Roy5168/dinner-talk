@@ -216,6 +216,24 @@ var ADMIN_ = {
     });
   },
 
+  // 清除回答：有 personId 只清那個人，沒有就清整場（同時取消公開、清空隱藏設定）
+  clearAnswers: function (p, store) {
+    return store.lock(function () {
+      var rows = store.read('answers');
+      var keep = rows.filter(function (r) { return !(r.sessionId === p.sessionId && (!p.personId || r.personId === p.personId)); });
+      store.write('answers', keep);
+      var sessions = store.read('sessions');
+      var s = sessions.filter(function (x) { return x.id === p.sessionId; })[0];
+      if (s) {
+        if (p.personId) s.hidden = s.hidden.filter(function (k) { return k.indexOf(p.personId + ':') !== 0; });
+        else { s.published = []; s.hidden = []; }
+        store.write('sessions', sessions);
+      }
+      store.bump();
+      return { cleared: rows.length - keep.length };
+    });
+  },
+
   deleteSession: function (p, store) {
     return store.lock(function () {
       var sessions = store.read('sessions').filter(function (s) { return s.id !== p.id; });

@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Noto+Sans+TC:wght@400;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/style.css?v=20261028c">
+<link rel="stylesheet" href="assets/style.css?v=20261028d">
 <style>
   .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 8px 0; }
   .topbar .brand { display: flex; align-items: center; gap: 10px; }
@@ -52,9 +52,9 @@
 <body>
 <main class="wrap wide" id="app"><p class="waiting">載入中<span class="dot-pulse"></span></p></main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="config.js?v=20261028c"></script>
-<script src="assets/api.js?v=20261028c"></script>
-<script src="assets/common.js?v=20261028c"></script>
+<script src="config.js?v=20261028d"></script>
+<script src="assets/api.js?v=20261028d"></script>
+<script src="assets/common.js?v=20261028d"></script>
 <script>
 (function () {
   var h = UI.h, app = document.getElementById('app');
@@ -157,7 +157,11 @@
           h('button.btn.small.amber', { onclick: showQR }, '顯示 QR Code'),
           h('a.btn.small.ghost', { href: 'screen.html' + location.search, target: '_blank' }, '開投影畫面'),
           h('a.btn.small.ghost', { href: 'game.html' + location.search, target: '_blank' }, '小遊戲'),
-          h('button.btn.small.ghost', { onclick: function () { exportCsv(s); } }, '匯出 Excel'))),
+          h('button.btn.small.ghost', { onclick: function () { exportCsv(s); } }, '匯出 Excel'),
+          s.answers.length ? h('button.btn.small.danger', { onclick: function () {
+            if (!confirm('確定清除「' + s.title + '」所有人的回答？\n已公開的題目也會一起取消公開。清除後無法復原，建議先「匯出 Excel」留存。')) return;
+            act('clearAnswers', { sessionId: s.id }, '已清除所有回答');
+          } }, '清除所有回答') : null)),
       h('p', { style: 'margin-top:12px' }, '已作答 ', h('b', answered.length), ' / ' + s.attendees.length + ' 人'),
       h('div.roll', s.attendees.map(function (id) {
         var p = pm[id] || { name: '（已刪除）' };
@@ -200,6 +204,10 @@
         a ? h('button.link', { style: 'font-size:.82rem', title: '答案只能由當初作答的那支手機修改。換手機或清了瀏覽器資料時，按這裡讓他重新點名字作答。', onclick: function () {
           act('unlockAnswer', { sessionId: s.id, personId: id }, '已解除，' + p.name + ' 可以用新手機點名字修改');
         } }, '換手機作答') : null,
+        a ? h('button.link', { style: 'font-size:.82rem;color:var(--terracotta)', onclick: function () {
+          if (!confirm('確定清除 ' + p.name + ' 的回答？清除後無法復原。')) return;
+          act('clearAnswers', { sessionId: s.id, personId: id }, '已清除 ' + p.name + ' 的回答');
+        } }, '清除回答') : null,
         a && hasContent(a.answers) ? h('dl.person-ans', s.questions.map(function (q, i) {
           var r = a.answers[q.id] || {};
           var parts = (r.choices || []).slice();
