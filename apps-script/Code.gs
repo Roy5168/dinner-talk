@@ -137,6 +137,7 @@ var ADMIN_ = {
       if (!name) throw new Error('請輸入名字');
       var people = store.read('people');
       var person = p.id ? people.filter(function (x) { return x.id === p.id; })[0] : null;
+      var isNew = !person;
       if (!person) {
         person = { id: uid_(), active: true, createdAt: new Date().toISOString() };
         people.push(person);
@@ -145,9 +146,11 @@ var ADMIN_ = {
       person.role = p.role === '新朋友' ? '新朋友' : '組員';
       if (p.active !== undefined) person.active = !!p.active;
       store.write('people', people);
-      if (p.addToSession) {
+      // 新增的人預設加入本次聚會（否則作答頁看不到名字）；addToSession: false 表示不要
+      var target = p.addToSession || (isNew && p.addToSession !== false ? 'current' : null);
+      if (target) {
         var sessions = store.read('sessions');
-        var s = sessions.filter(function (x) { return x.id === p.addToSession; })[0];
+        var s = sessions.filter(function (x) { return target === 'current' ? x.current : x.id === target; })[0];
         if (s && s.attendees.indexOf(person.id) < 0) { s.attendees.push(person.id); store.write('sessions', sessions); }
       }
       store.bump();

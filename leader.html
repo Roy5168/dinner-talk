@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Noto+Sans+TC:wght@400;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/style.css?v=20261028b">
+<link rel="stylesheet" href="assets/style.css?v=20261028c">
 <style>
   .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 8px 0; }
   .topbar .brand { display: flex; align-items: center; gap: 10px; }
@@ -52,9 +52,9 @@
 <body>
 <main class="wrap wide" id="app"><p class="waiting">載入中<span class="dot-pulse"></span></p></main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="config.js?v=20261028b"></script>
-<script src="assets/api.js?v=20261028b"></script>
-<script src="assets/common.js?v=20261028b"></script>
+<script src="config.js?v=20261028c"></script>
+<script src="assets/api.js?v=20261028c"></script>
+<script src="assets/common.js?v=20261028c"></script>
 <script>
 (function () {
   var h = UI.h, app = document.getElementById('app');
@@ -210,7 +210,18 @@
         })) : h('p.faint', '尚未作答'));
     }));
 
-    return h('div', header, h('div.row', { style: 'justify-content:space-between;margin:8px 0 14px' }, seg,
+    var active = S.data.people.filter(function (p) { return p.active; });
+    var emptyWarn = s.attendees.length ? null : h('div.card', { style: 'border-color:#e6b25c;background:#fff6e4' },
+      h('h3', '⚠️ 這場聚會還沒有出席名單'),
+      h('p', '組員打開作答頁時，會看不到任何名字可以點選。'),
+      h('div.btn-row',
+        active.length ? h('button.btn.amber', { onclick: function () {
+          act('saveSession', { session: { id: s.id, date: s.date, title: s.title, verse: s.verse, questions: s.questions,
+            attendees: active.map(function (p) { return p.id; }) } }, '已把 ' + active.length + ' 人加入本次聚會');
+        } }, '把名單上 ' + active.length + ' 人全部加入') : null,
+        h('button.btn.ghost', { onclick: function () { S.tab = active.length ? 'prep' : 'people'; S.form = formFrom(s); render(); } },
+          active.length ? '到「準備聚會」勾選' : '先到「組員名單」新增')));
+    return h('div', header, emptyWarn, h('div.row', { style: 'justify-content:space-between;margin:8px 0 14px' }, seg,
       h('span.hint', '公開只顯示統計與文字，不會顯示姓名；不想公開的文字可按「不要公開」。')), content);
   }
 
@@ -312,7 +323,7 @@
       var name = guestName.value.trim();
       if (!name) return;
       UI.toast('加入中…');
-      call('savePerson', { name: name, role: '新朋友' }).then(function (r) {
+      call('savePerson', { name: name, role: '新朋友', addToSession: false }).then(function (r) {
         F.attendees.push(r.person.id);
         UI.toast('已加入：' + name);
         S.tab = 'prep'; render();
