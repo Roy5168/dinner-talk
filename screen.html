@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>晚餐分享・投影</title>
+<title>啟發人生聚會・投影</title>
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -49,7 +49,7 @@
     var s = S.session;
     app.innerHTML = '';
     if (!s) {
-      app.appendChild(h('div.wrap', h('div.hero', UI.scene(), h('h1', '晚餐分享')), h('p.waiting', '目前沒有進行中的聚會')));
+      app.appendChild(h('div.wrap', h('div.hero', UI.scene(), h('h1', '啟發人生聚會')), h('p.waiting', '目前沒有進行中的聚會')));
       return;
     }
     var pub = s.published.filter(function (id) { return s.results[id]; });
@@ -73,7 +73,7 @@
         })) : null);
     } else {
       main = h('div.main',
-        h('div.hero', { style: 'text-align:left' }, h('div.eyebrow', '今晚的晚餐分享'), h('h1', s.title), h('div.date', UI.fmtDate(s.date))),
+        h('div.hero', { style: 'text-align:left' }, h('div.eyebrow', '啟發人生聚會'), h('h1', s.title), h('div.date', UI.fmtDate(s.date))),
         h('div.card', h('h2', '今晚我們一起聊聊'), h('ol.qlist', qs.map(function (x) { return h('li', x.text); }))),
         h('p.muted', '用手機掃描左邊的 QR Code，點自己的名字就可以開始作答。'));
     }

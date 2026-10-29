@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>晚餐分享</title>
+<title>啟發人生聚會</title>
 <meta name="theme-color" content="#f5ede0">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,7 +41,7 @@
   function viewLoading() { return h('p.waiting', '載入中', h('span.dot-pulse')); }
 
   function viewNone() {
-    return h('div', h('div.hero', UI.scene(), h('h1', '晚餐分享')),
+    return h('div', h('div.hero', UI.scene(), h('h1', '啟發人生聚會')),
       h('p.waiting', '目前沒有進行中的聚會，請稍候小組長開始', h('span.dot-pulse')));
   }
 
@@ -49,7 +49,7 @@
     var s = S.session;
     var groups = [['組員', '小組成員'], ['新朋友', '新朋友']];
     return h('div',
-      h('div.hero', UI.scene(), h('div.eyebrow', '今晚的晚餐分享'), h('h1', s.title), h('div.date', UI.fmtDate(s.date))),
+      h('div.hero', UI.scene(), h('div.eyebrow', '啟發人生聚會'), h('h1', s.title), h('div.date', UI.fmtDate(s.date))),
       h('div.card',
         h('h2', '歡迎！請點你的名字'),
         groups.map(function (g) {
