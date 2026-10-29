@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>夜路導航</title>
+<meta name="theme-color" content="#141a2c">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Noto+Sans+TC:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css?v=20261029a">
+<style>
+  html, body { height: 100%; }
+  body { background: #141a2c; overflow: hidden; overscroll-behavior: none; -webkit-user-select: none; user-select: none; }
+  .game { position: relative; max-width: 520px; margin: 0 auto; height: 100vh; height: 100dvh; display: flex; flex-direction: column; background: #0e1220; }
+  .navbar {
+    display: flex; align-items: center; gap: 12px; padding: 10px 14px; padding-top: calc(10px + env(safe-area-inset-top));
+    background: #1d5c40; color: #fff; min-height: 64px;
+  }
+  .navbar .arrow { flex: 0 0 44px; height: 44px; border-radius: 12px; background: rgba(255,255,255,.14); display: grid; place-items: center; font-size: 28px; font-weight: 700; }
+  .navbar .dist { font-size: .85rem; opacity: .85; }
+  .navbar .instr { font-size: 1.25rem; font-weight: 600; line-height: 1.3; }
+  .navbar .lvl { margin-left: auto; font-size: .8rem; opacity: .8; text-align: right; white-space: nowrap; }
+  .navbar.reroute { background: #8a3b26; }
+  .voice { position: absolute; left: 12px; right: 12px; top: calc(78px + env(safe-area-inset-top)); z-index: 2; text-align: center; pointer-events: none; }
+  .voice span { display: inline-block; background: rgba(14,18,32,.72); color: #f7e2c4; padding: .3em .9em; border-radius: 999px; font-size: .92rem; opacity: 0; transition: opacity .3s; }
+  .voice span.show { opacity: 1; }
+  .stage { position: relative; flex: 1; min-height: 0; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 12px 14px; padding-bottom: calc(14px + env(safe-area-inset-bottom)); background: #141a2c; }
+  .dir {
+    border: 0; border-radius: 16px; padding: 12px 4px; background: #2a3150; color: #f3ead9;
+    font-size: 1rem; font-weight: 600; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    transition: background .15s, transform .08s, opacity .2s;
+  }
+  .dir b { font-size: 1.7rem; line-height: 1; }
+  .dir:active { transform: scale(.96); }
+  .dir.on { background: var(--amber); color: #fff; }
+  .dir:disabled { opacity: .25; }
+  .overlay { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(10,13,26,.55); overflow-y: auto; }
+  .overlay .card { margin: auto; width: 100%; max-width: 440px; }
+  .overlay.clear { background: transparent; align-items: flex-end; pointer-events: none; }
+  .overlay.clear .card { pointer-events: auto; margin: 0 0 8px; }
+  .big-emoji { font-size: 2.6rem; text-align: center; line-height: 1.2; }
+  .stat { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+  .stat div { background: var(--paper-2); border-radius: 14px; padding: 10px; text-align: center; }
+  .stat b { display: block; font-family: var(--font-hand); font-size: 2rem; color: var(--wood-dark); line-height: 1.2; }
+  .reflect { padding-left: 1.2em; margin: 8px 0; }
+  .reflect li { margin: 6px 0; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="game">
+  <div class="navbar" id="navbar">
+    <div class="arrow" id="navArrow">↑</div>
+    <div><div class="dist" id="navDist">導航</div><div class="instr" id="navText">準備出發</div></div>
+    <div class="lvl" id="navLvl"></div>
+  </div>
+  <div class="stage" id="stage">
+    <canvas id="cv"></canvas>
+    <div class="voice"><span id="voice"></span></div>
+    <div class="overlay" id="overlay"></div>
+  </div>
+  <div class="controls" id="controls">
+    <button class="dir" data-d="L"><b>←</b>左轉</button>
+    <button class="dir" data-d="S"><b>↑</b>直行</button>
+    <button class="dir" data-d="R"><b>→</b>右轉</button>
+  </div>
+</div>
+<script>
+(function () {
+  var DIRS = { L: { label: '左轉', icon: '←', dx: -1 }, S: { label: '直行', icon: '↑', dx: 0 }, R: { label: '右轉', icon: '→', dx: 1 } };
+
+  // 關卡：opts＝路口有哪些方向，ok＝導航指示的正確方向，fake＝看起來比較好走的陷阱
+  var LEVELS = [
+    {
+      name: '第 1 關・黃昏', mode: 'day', emoji: '🌇',
+      intro: '天還亮著，看得清楚路。先跟著導航開一段，熟悉一下操作。',
+      junctions: [
+        { opts: 'LR', ok: 'R', say: '導航：前方路口右轉。' },
+        { opts: 'SR', ok: 'S' },
+        { opts: 'LS', ok: 'L', say: '眼睛看得見的時候，相信導航很容易。' }
+      ]
+    },
+    {
+      name: '第 2 關・入夜', mode: 'dark', emoji: '🌙',
+      intro: '天黑了，山路沒有路燈，車燈只照得到眼前一小段。你看不見前面的路，只能選擇相信導航。',
+      junctions: [
+        { opts: 'LSR', ok: 'L', say: '看不見也沒關係，導航看得見整條路。' },
+        { opts: 'LR', ok: 'R' },
+        { opts: 'SR', ok: 'R', say: '導航：繼續跟著我。' },
+        { opts: 'LS', ok: 'S' }
+      ]
+    },
+    {
+      name: '第 3 關・起霧', mode: 'fog', emoji: '🌫️',
+      intro: '起霧了。路邊開始出現看起來更好走、更亮的路，還有寫著「捷徑」的牌子……你會跟著感覺，還是跟著導航？',
+      junctions: [
+        { opts: 'LS', ok: 'S', fake: 'L', sign: '捷徑・省 5 分鐘', trap: '那條「捷徑」在霧裡看起來很好走，其實是一條斷掉的舊路。' },
+        { opts: 'SR', ok: 'R', fake: 'S', sign: '這條比較亮', trap: '亮亮的那條路，原來是工地的探照燈，前面是施工的大洞。' },
+        { opts: 'LR', ok: 'L', fake: 'R', sign: '大家都走這裡', trap: '很多人走過的路，不一定通到家。前面是一片懸崖。', say: '導航：感覺會變，路線不會變。' },
+        { opts: 'LSR', ok: 'R', fake: 'S', sign: '觀景台 →', trap: '觀景台很美，但它是條死路，回不了家。' }
+      ]
+    }
+  ];
+
+  var cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+  var overlay = document.getElementById('overlay');
+  var navbar = document.getElementById('navbar'), navArrow = document.getElementById('navArrow'), navDist = document.getElementById('navDist'), navText = document.getElementById('navText'), navLvl = document.getElementById('navLvl');
+  var voiceEl = document.getElementById('voice');
+  var buttons = Array.prototype.slice.call(document.querySelectorAll('.dir'));
+  var W = 0, H = 0, DPR = 1;
+
+  var S = {
+    level: 0, j: 0, phase: 'menu', p: 0, choice: null, missHere: false, q: 0, fade: 0,
+    trust: 0, feel: 0, levelStats: [], scroll: 0, door: 0
+  };
+
+  function resize() {
+    var r = cv.parentNode.getBoundingClientRect();
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = r.width; H = r.height;
+    cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+
+  /* ---------- 小工具 ---------- */
+  function el(html) { var d = document.createElement('div'); d.innerHTML = html.trim(); return d.firstChild; }
+  function showOverlay(html, clear) {
+    overlay.innerHTML = html;
+    overlay.classList.toggle('clear', !!clear);
+    overlay.classList.remove('hidden');
+  }
+  function hideOverlay() { overlay.classList.add('hidden'); overlay.innerHTML = ''; }
+  var voiceTimer;
+  function say(text, ms) {
+    if (!text) return;
+    voiceEl.textContent = text; voiceEl.classList.add('show');
+    clearTimeout(voiceTimer);
+    voiceTimer = setTimeout(function () { voiceEl.classList.remove('show'); }, ms || 2600);
+  }
+  function buzz(ms) { if (navigator.vibrate) try { navigator.vibrate(ms); } catch (e) { /* 不支援就算了 */ } }
+  function J() { return LEVELS[S.level].junctions[S.j]; }
+  function mode() { return LEVELS[S.level].mode; }
+
+  // 固定位置的星星
+  var stars = [];
+  for (var i = 0; i < 60; i++) stars.push([Math.random(), Math.random(), Math.random() * 1.2 + .3]);
+
+  /* ---------- 導航列與按鈕 ---------- */
+  function updateNav() {
+    if (S.phase === 'crash') return;   // 保留「重新規劃」畫面
+    var jn = J();
+    navbar.classList.remove('reroute');
+    navLvl.innerHTML = LEVELS[S.level].name + '<br>路口 ' + (S.j + 1) + ' / ' + LEVELS[S.level].junctions.length;
+    navArrow.textContent = DIRS[jn.ok].icon;
+    if (S.phase === 'wait') { navDist.textContent = '就在這裡'; navText.textContent = '請' + DIRS[jn.ok].label; }
+    else {
+      var m = Math.max(10, Math.round((1 - S.p) * 30) * 10);
+      navDist.textContent = m + ' 公尺後';
+      navText.textContent = DIRS[jn.ok].label;
+    }
+    buttons.forEach(function (b) {
+      var d = b.getAttribute('data-d');
+      b.disabled = jn.opts.indexOf(d) < 0 || !(S.phase === 'approach' || S.phase === 'wait');
+      b.classList.toggle('on', S.choice === d);
+    });
+  }
+  function rerouteNav() {
+    navbar.classList.add('reroute');
+    navArrow.textContent = '↻';
+    navDist.textContent = '已偏離路線';
+    navText.textContent = '正在重新規劃…';
+    buttons.forEach(function (b) { b.disabled = true; b.classList.remove('on'); });
+  }
+
+  function choose(d) {
+    if (!(S.phase === 'approach' || S.phase === 'wait')) return;
+    if (J().opts.indexOf(d) < 0) return;
+    S.choice = d;
+    if (S.phase === 'wait') resolve();
+    updateNav();
+  }
+  buttons.forEach(function (b) { b.addEventListener('click', function () { choose(b.getAttribute('data-d')); }); });
+  window.addEventListener('keydown', function (e) {
+    var map = { ArrowLeft: 'L', ArrowUp: 'S', ArrowRight: 'R' };
+    if (map[e.key]) { e.preventDefault(); choose(map[e.key]); }
+  });
+
+  /* ---------- 流程 ---------- */
+  function menu() {
+    S.phase = 'menu';
+    navLvl.textContent = ''; navArrow.textContent = '🏠'; navDist.textContent = '目的地'; navText.textContent = '回家';
+    buttons.forEach(function (b) { b.disabled = true; b.classList.remove('on'); });
+    showOverlay(
+      '<div class="card">' +
+      '<div class="big-emoji">🚗🌙</div>' +
+      '<h1 style="text-align:center">夜路導航</h1>' +
+      '<p>晚餐結束，你要開車回到山上的小屋。路上會<b>天黑</b>、會<b>起霧</b>，有時候你看不見前面的路。</p>' +
+      '<p>每到路口，用下面的按鈕選擇方向。<br>你會相信導航，還是相信自己的感覺？</p>' +
+      '<button class="btn amber block" id="go" style="margin-top:12px">發動引擎</button>' +
+      '<p class="faint" style="text-align:center;margin-top:10px">約 3 分鐘・也可以用鍵盤方向鍵</p>' +
+      '</div>');
+    document.getElementById('go').onclick = function () { S.level = 0; S.trust = 0; S.feel = 0; S.levelStats = []; levelIntro(); };
+  }
+
+  function levelIntro() {
+    var L = LEVELS[S.level];
+    S.phase = 'intro'; S.j = 0; S.p = 0; S.choice = null;
+    S.levelStats[S.level] = { trust: 0, feel: 0 };
+    showOverlay('<div class="card" style="text-align:center">' +
+      '<div class="big-emoji">' + L.emoji + '</div><h2>' + L.name + '</h2><p style="text-align:left">' + L.intro + '</p>' +
+      '<button class="btn amber block" id="go" style="margin-top:12px">出發</button></div>');
+    document.getElementById('go').onclick = function () { hideOverlay(); startJunction(); };
+  }
+
+  function startJunction() {
+    S.phase = 'approach'; S.p = 0; S.choice = null; S.missHere = false; S.fade = 1;
+    updateNav();
+    say(J().say, 3000);
+  }
+
+  function resolve() {
+    var jn = J();
+    if (S.choice === jn.ok) {
+      if (!S.missHere) { S.trust++; S.levelStats[S.level].trust++; }
+      S.phase = 'turn'; S.q = 0;
+      updateNav();
+      return;
+    }
+    // 走錯了
+    S.feel++; S.levelStats[S.level].feel++; S.missHere = true;
+    S.phase = 'crash';
+    buzz([60, 40, 120]);
+    rerouteNav();
+    var m = mode();
+    var msg = S.choice === jn.fake && jn.trap ? jn.trap
+      : m === 'day' ? '這條路走不通，前面是死巷。還好天還亮，看得清楚。'
+      : '黑暗中什麼都看不清楚——前面是斷崖！還好及時煞車。';
+    showOverlay('<div class="card" style="text-align:center">' +
+      '<div class="big-emoji">⚠️</div><h2>道路中斷</h2><p>' + msg + '</p>' +
+      '<p class="muted">導航說的是「' + DIRS[jn.ok].label + '」。</p>' +
+      '<button class="btn block" id="go" style="margin-top:8px">迴轉，跟著導航</button></div>');
+    document.getElementById('go').onclick = function () {
+      hideOverlay();
+      S.phase = 'approach'; S.p = .55; S.choice = null; S.fade = .6;
+      updateNav();
+      say('導航：沒關係，我們再試一次。');
+    };
+  }
+
+  function nextAfterTurn() {
+    S.j++;
+    if (S.j < LEVELS[S.level].junctions.length) return startJunction();
+    S.level++;
+    if (S.level < LEVELS.length) return levelIntro();
+    arriveHome();
+  }
+
+  function arriveHome() {
+    S.phase = 'home'; S.door = 0;
+    navbar.classList.remove('reroute');
+    navArrow.textContent = '🏠'; navDist.textContent = '已抵達'; navText.textContent = '目的地就在你眼前'; navLvl.textContent = '';
+    buttons.forEach(function (b) { b.disabled = true; b.classList.remove('on'); });
+    setTimeout(function () {
+      showOverlay('<div class="card">' +
+        '<p class="verse" style="font-size:1.1rem">「看哪，我站在門外叩門，若有聽見我聲音就開門的，我要進到他那裡去，我與他，他與我一同坐席。」<small>啟示錄 3:20</small></p>' +
+        '<p class="muted" style="text-align:center">你平安到家了。耶穌也在你生命的門外敲門——你願意開門嗎？</p>' +
+        '<button class="btn amber block" id="go">開門</button></div>', true);
+      document.getElementById('go').onclick = function () {
+        hideOverlay(); S.phase = 'opening';
+        setTimeout(function () {
+          showOverlay('<div class="card" style="text-align:center">' +
+            '<p class="hand" style="font-size:1.3rem;margin:0">祂不是「可能會」進來，<br>而是「一定會」進來。</p>' +
+            '<button class="btn block" id="go" style="margin-top:12px">看看我的旅程</button></div>', true);
+          document.getElementById('go').onclick = summary;
+        }, 1800);
+      };
+    }, 900);
+  }
+
+  function summary() {
+    S.phase = 'summary';
+    var rows = LEVELS.map(function (L, i) {
+      var st = S.levelStats[i] || { trust: 0, feel: 0 };
+      return '<tr><td>' + L.emoji + ' ' + L.name.replace(/^第 \d 關・/, '') + '</td><td>' + st.trust + ' / ' + L.junctions.length + '</td><td>' + st.feel + '</td></tr>';
+    }).join('');
+    showOverlay('<div class="card">' +
+      '<h2 style="text-align:center">平安到家了 🏠</h2>' +
+      '<div class="stat"><div><b>' + S.trust + '</b>一次就跟著導航</div><div><b>' + S.feel + '</b>憑感覺走錯</div></div>' +
+      '<table style="width:100%;font-size:.92rem;border-collapse:collapse"><tr class="faint"><td>關卡</td><td>一次就對</td><td>走錯</td></tr>' + rows + '</table>' +
+      '<h3 style="margin-top:16px">想一想</h3><ul class="reflect">' +
+      '<li>導航值得信任，不是因為你看得見路，而是因為<b>它看得見整條路</b>。信心不是盲目的相信，而是根據可靠的證據，邁出一步。</li>' +
+      '<li>起霧的時候，感覺會騙人；導航的指示不會因為天氣改變。信仰比較像<b>關係裡的信任</b>，不是一時的感覺。</li>' +
+      '<li>就算走錯了，導航也不會丟下你，只會說「重新規劃路線」。</li></ul>' +
+      '<h3>聊聊看</h3><ul class="reflect">' +
+      '<li>哪一關最難相信導航？為什麼？</li>' +
+      '<li>生活中，有沒有哪一次「完全看不見、卻必須選擇相信」的經驗？</li>' +
+      '<li>霧裡的「捷徑」，像是生活中的什麼？</li></ul>' +
+      '<div class="btn-row" style="justify-content:center;margin-top:12px">' +
+      '<button class="btn ghost" id="again">再玩一次</button><a class="btn" href="../' + location.search + '">回到聚會頁</a></div></div>');
+    document.getElementById('again').onclick = menu;
+  }
+
+  /* ---------- 繪圖 ---------- */
+  function hw(y, hy, bw) { return Math.max(1.2, bw * (y - hy) / (H - hy)); }
+
+  function poly(pts, fill) {
+    ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+    for (var k = 1; k < pts.length; k++) ctx.lineTo(pts[k][0], pts[k][1]);
+    ctx.closePath(); ctx.fillStyle = fill; ctx.fill();
+  }
+
+  function drawSky(night, hy) {
+    var g = ctx.createLinearGradient(0, 0, 0, hy);
+    if (night) { g.addColorStop(0, '#070a1c'); g.addColorStop(1, '#232b52'); }
+    else { g.addColorStop(0, '#e9965f'); g.addColorStop(.6, '#f6c48d'); g.addColorStop(1, '#fde6c4'); }
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, hy + 1);
+    if (night) {
+      ctx.fillStyle = '#fff';
+      stars.forEach(function (s) { ctx.globalAlpha = .35 + .4 * Math.abs(Math.sin(S.scroll * 2 + s[0] * 9)); ctx.fillRect(s[0] * W, s[1] * hy * .9, s[2], s[2]); });
+      ctx.globalAlpha = 1;
+      ctx.beginPath(); ctx.arc(W * .8, hy * .28, 14, 0, 7); ctx.fillStyle = '#f4ecd2'; ctx.fill();
+      ctx.beginPath(); ctx.arc(W * .8 + 6, hy * .28 - 4, 12, 0, 7); ctx.fillStyle = '#0d1230'; ctx.fill();
+    } else {
+      ctx.beginPath(); ctx.arc(W * .72, hy * .82, 26, 0, 7); ctx.fillStyle = '#fff1d0'; ctx.fill();
+    }
+    // 遠山
+    var c1 = night ? '#161c3a' : '#c48d72', c2 = night ? '#10152c' : '#a8735e';
+    poly([[0, hy], [0, hy - 30], [W * .18, hy - 58], [W * .35, hy - 26], [W * .5, hy - 48], [W * .68, hy - 18], [W, hy - 52], [W, hy]], c1);
+    poly([[0, hy], [W * .1, hy - 18], [W * .3, hy - 8], [W * .55, hy - 26], [W * .8, hy - 6], [W, hy - 20], [W, hy]], c2);
+  }
+
+  function tree(x, y, s, color) {
+    poly([[x, y - s * 1.6], [x - s * .55, y], [x + s * .55, y]], color);
+    ctx.fillStyle = color; ctx.fillRect(x - s * .07, y, s * .14, s * .25);
+  }
+
+  function sign(x, y, s, text, dir) {
+    s = Math.max(.35, Math.min(1.4, s));
+    ctx.font = '600 13px "Noto Sans TC", sans-serif';
+    var label = text + ' ' + (dir === 'L' ? '←' : dir === 'R' ? '→' : '↑');
+    var w = ctx.measureText(label).width + 18;
+    x = Math.max(8 + w * s / 2, Math.min(W - 8 - w * s / 2, x));   // 牌子不要超出畫面
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+    ctx.fillStyle = '#4a3a2c'; ctx.fillRect(-2, -46, 4, 46);
+    ctx.shadowColor = 'rgba(255,210,120,.9)'; ctx.shadowBlur = 16;
+    ctx.fillStyle = '#f2c14e'; ctx.fillRect(-w / 2, -72, w, 26);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#2b1d10'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(label, 0, -59);
+    ctx.restore();
+  }
+
+  function drawRoad(jn, p, m) {
+    var night = m !== 'day';
+    var hy = H * .34, vx = W / 2, bw = W * .44, Hj = H * .7;
+    drawSky(night, hy);
+    var gg = ctx.createLinearGradient(0, hy, 0, H);
+    if (night) { gg.addColorStop(0, '#0b1410'); gg.addColorStop(1, '#16241a'); }
+    else { gg.addColorStop(0, '#a9a868'); gg.addColorStop(1, '#7f8a4c'); }
+    ctx.fillStyle = gg; ctx.fillRect(0, hy, W, H - hy);
+
+    var jy = hy + (Hj - hy) * Math.pow(p, 1.7);
+    var h0 = hw(jy, hy, bw);
+    var jt = jy - Math.max(3, h0 * .5);
+    var ht = hw(jt, hy, bw);
+    var depth = jy - jt;
+    var asphalt = night ? '#2b2b35' : '#5d5049', edge = night ? 'rgba(230,230,240,.5)' : 'rgba(255,248,235,.75)';
+    var fog = m === 'fog';
+    // 霧裡：陷阱路看起來寬又亮，正確的路看起來窄
+    function widthOf(d) { return fog && jn.fake ? (d === jn.fake ? 1.5 : d === jn.ok ? .55 : 1) : 1; }
+
+    // 主路
+    poly([[vx - bw, H], [vx + bw, H], [vx + h0, jy], [vx - h0, jy]], asphalt);
+    // 路口
+    poly([[vx - h0, jy], [vx + h0, jy], [vx + ht, jt], [vx - ht, jt]], asphalt);
+    // 直行
+    if (jn.opts.indexOf('S') >= 0) {
+      var k = widthOf('S');
+      poly([[vx - ht * k, jt], [vx + ht * k, jt], [vx + 1, hy], [vx - 1, hy]], asphalt);
+    } else {
+      ctx.fillStyle = night ? '#0a110c' : '#5e6b3a';
+      for (var b = -3; b <= 3; b++) tree(vx + b * ht * .35, jt, Math.max(2, depth * 1.1), ctx.fillStyle);
+    }
+    ['L', 'R'].forEach(function (d) {
+      if (jn.opts.indexOf(d) < 0) return;
+      var s = d === 'L' ? -1 : 1, k = widthOf(d);
+      var mid = (jt + jy) / 2, half = depth * .5 * k;
+      poly([[vx + s * h0, jy], [vx + s * ht, jt], [vx + s * W * .62, mid - half * .5 - depth * .6], [vx + s * W * .62, mid + half * .5 - depth * .3]], asphalt);
+    });
+    // 路邊白線
+    ctx.strokeStyle = edge; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(vx - bw * .96, H); ctx.lineTo(vx - h0 * .96, jy); ctx.moveTo(vx + bw * .96, H); ctx.lineTo(vx + h0 * .96, jy); ctx.stroke();
+    // 中線虛線（往前移動）
+    ctx.fillStyle = night ? 'rgba(240,200,90,.8)' : '#f4d27a';
+    for (var n = 0; n < 12; n++) {
+      var a = ((n / 12) + S.scroll) % 1, a2 = a + .035;
+      var y1 = hy + (H - hy) * a * a, y2 = hy + (H - hy) * a2 * a2;
+      if (y1 < jy) continue;
+      var w1 = hw(y1, hy, bw) * .025, w2 = hw(y2, hy, bw) * .025;
+      poly([[vx - w1, y1], [vx + w1, y1], [vx + w2, Math.min(y2, H)], [vx - w2, Math.min(y2, H)]], ctx.fillStyle);
+    }
+    // 路樹
+    var tc = night ? '#08100a' : '#56633a';
+    for (var t = 0; t < 14; t++) {
+      var a3 = ((t / 14) + S.scroll * .5) % 1, y = hy + (H - hy) * a3 * a3;
+      if (y < jy + 2) continue;
+      var sc = 6 + 90 * a3 * a3, side = t % 2 ? 1 : -1;
+      tree(vx + side * (hw(y, hy, bw) + 14 + sc * .7), y, sc, tc);
+    }
+
+    if (night) {
+      // 車燈以外都是黑的
+      var r = H * (fog ? .62 : .56);
+      var g2 = ctx.createRadialGradient(vx, H * 1.08, H * .08, vx, H * 1.08, r);
+      g2.addColorStop(0, 'rgba(4,6,16,0)'); g2.addColorStop(.72, 'rgba(4,6,16,.5)'); g2.addColorStop(1, 'rgba(4,6,16,.96)');
+      ctx.fillStyle = g2; ctx.fillRect(0, hy - 2, W, H - hy + 2);
+      poly([[vx - bw * .55, H], [vx + bw * .55, H], [vx + bw * .12, H * .55], [vx - bw * .12, H * .55]], 'rgba(255,232,170,.07)');
+    }
+    if (fog) {
+      var g3 = ctx.createLinearGradient(0, hy - 20, 0, H);
+      g3.addColorStop(0, 'rgba(150,156,176,.85)'); g3.addColorStop(.55, 'rgba(120,126,146,.55)'); g3.addColorStop(1, 'rgba(110,116,136,.12)');
+      ctx.fillStyle = g3; ctx.fillRect(0, hy - 20, W, H - hy + 20);
+      if (jn.fake) {
+        // 陷阱那邊亮著燈，看起來很好走
+        var fx = jn.fake === 'L' ? vx - W * .3 : jn.fake === 'R' ? vx + W * .3 : vx;
+        var fy = jn.fake === 'S' ? (jt + hy) / 2 : jt - depth * .3;
+        var g4 = ctx.createRadialGradient(fx, fy, 2, fx, fy, W * (.12 + .25 * p));
+        g4.addColorStop(0, 'rgba(255,220,150,.75)'); g4.addColorStop(1, 'rgba(255,220,150,0)');
+        ctx.fillStyle = g4; ctx.fillRect(0, 0, W, H);
+      }
+    }
+    if (jn.sign && p > .15) {
+      var sx = jn.fake === 'L' ? vx - h0 - 26 * p - 10 : jn.fake === 'R' ? vx + h0 + 26 * p + 10 : vx + ht + 30 * p + 8;
+      sign(sx, jy, .35 + p * .9, jn.sign, jn.fake);
+    }
+    // 引擎蓋
+    var hood = night ? '#3a1812' : '#8e3a26';
+    ctx.beginPath(); ctx.moveTo(-10, H); ctx.quadraticCurveTo(W / 2, H - H * .11, W + 10, H); ctx.closePath();
+    ctx.fillStyle = hood; ctx.fill();
+  }
+
+  function drawHome(open) {
+    var hy = H * .5, vx = W / 2;
+    drawSky(true, hy);
+    ctx.fillStyle = '#0d1812'; ctx.fillRect(0, hy, W, H - hy);
+    var hw2 = Math.min(W * .34, 170), base = hy + H * .08, top = base - hw2 * .95;
+    // 小徑
+    poly([[vx - W * .3, H], [vx + W * .3, H], [vx + 18, base], [vx - 18, base]], '#2a2420');
+    // 房子
+    var glow = ctx.createRadialGradient(vx, base - hw2 * .4, 10, vx, base - hw2 * .4, hw2 * 1.6);
+    glow.addColorStop(0, 'rgba(255,200,110,' + (.18 + open * .35) + ')'); glow.addColorStop(1, 'rgba(255,200,110,0)');
+    ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
+    poly([[vx - hw2, base], [vx + hw2, base], [vx + hw2, top + hw2 * .3], [vx - hw2, top + hw2 * .3]], '#5b3a26');
+    poly([[vx - hw2 * 1.15, top + hw2 * .32], [vx, top - hw2 * .35], [vx + hw2 * 1.15, top + hw2 * .32]], '#2f1c10');
+    // 窗
+    [[-.62, 1], [.62, 1]].forEach(function (w) {
+      ctx.fillStyle = '#ffcf7a';
+      ctx.fillRect(vx + w[0] * hw2 - hw2 * .17, top + hw2 * .5, hw2 * .34, hw2 * .3);
+      ctx.fillStyle = '#5b3a26'; ctx.fillRect(vx + w[0] * hw2 - 1.5, top + hw2 * .5, 3, hw2 * .3);
+    });
+    // 門與光
+    var dw = hw2 * .38, dh = hw2 * .58, dx = vx - dw / 2, dy = base - dh;
+    ctx.fillStyle = '#ffe2a6'; ctx.fillRect(dx, dy, dw, dh);
+    if (open > 0) poly([[dx, base], [dx + dw, base], [vx + W * .32 * open + dw, H], [vx - W * .32 * open - dw, H]], 'rgba(255,214,140,' + (.45 * open) + ')');
+    var panel = dw * (1 - open * .85);
+    ctx.fillStyle = '#8b5a3c'; ctx.fillRect(dx, dy, panel, dh);
+    ctx.fillStyle = '#e8b04f'; if (open < .6) { ctx.beginPath(); ctx.arc(dx + panel - 7, dy + dh * .55, 3, 0, 7); ctx.fill(); }
+    // 停好的車
+    ctx.beginPath(); ctx.moveTo(-10, H); ctx.quadraticCurveTo(W / 2, H - H * .11, W + 10, H); ctx.closePath();
+    ctx.fillStyle = '#3a1812'; ctx.fill();
+  }
+
+  /* ---------- 主迴圈 ---------- */
+  var lastT = 0;
+  function frame(t) {
+    var dt = Math.min(.05, (t - lastT) / 1000 || 0); lastT = t;
+    if (W === 0) resize();
+    ctx.clearRect(0, 0, W, H);
+
+    if (S.phase === 'home' || S.phase === 'opening' || S.phase === 'summary') {
+      if (S.phase === 'opening' || S.phase === 'summary') S.door = Math.min(1, S.door + dt * .8);
+      S.scroll += dt * .05;
+      drawHome(S.door);
+    } else if (S.phase === 'menu' || S.phase === 'intro') {
+      S.scroll += dt * .15;
+      drawRoad({ opts: 'S', ok: 'S' }, .05, S.phase === 'menu' ? 'dark' : LEVELS[S.level].mode);
+    } else {
+      var jn = J(), m = mode();
+      if (S.phase === 'approach') {
+        S.p += dt / (S.choice ? 1.5 : 3.4);
+        S.scroll += dt * (S.choice ? .9 : .55);
+        if (S.p >= 1) { S.p = 1; if (S.choice) resolve(); else { S.phase = 'wait'; say('要往哪裡走？看看導航。', 2400); } }
+        updateNav();
+      }
+      if (S.phase === 'turn') {
+        S.q += dt / .65;
+        var dx = DIRS[S.choice].dx;
+        ctx.save();
+        if (dx) ctx.translate(-dx * S.q * W * .7, 0);
+        else { ctx.translate(W / 2, H * .7); ctx.scale(1 + S.q * .7, 1 + S.q * .7); ctx.translate(-W / 2, -H * .7); }
+        drawRoad(jn, 1, m);
+        ctx.restore();
+        ctx.fillStyle = 'rgba(8,10,20,' + Math.min(1, S.q) + ')'; ctx.fillRect(0, 0, W, H);
+        if (S.q >= 1) nextAfterTurn();
+      } else {
+        drawRoad(jn, S.p, m);
+      }
+      if (S.fade > 0 && S.phase !== 'turn') {
+        S.fade = Math.max(0, S.fade - dt * 2.5);
+        ctx.fillStyle = 'rgba(8,10,20,' + S.fade + ')'; ctx.fillRect(0, 0, W, H);
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  resize();
+  menu();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

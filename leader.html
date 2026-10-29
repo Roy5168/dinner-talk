@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Noto+Sans+TC:wght@400;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/style.css?v=20261028d">
+<link rel="stylesheet" href="assets/style.css?v=20261029a">
 <style>
   .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 8px 0; }
   .topbar .brand { display: flex; align-items: center; gap: 10px; }
@@ -52,9 +52,10 @@
 <body>
 <main class="wrap wide" id="app"><p class="waiting">載入中<span class="dot-pulse"></span></p></main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="config.js?v=20261028d"></script>
-<script src="assets/api.js?v=20261028d"></script>
-<script src="assets/common.js?v=20261028d"></script>
+<script src="config.js?v=20261029a"></script>
+<script src="games/registry.js?v=20261029a"></script>
+<script src="assets/api.js?v=20261029a"></script>
+<script src="assets/common.js?v=20261029a"></script>
 <script>
 (function () {
   var h = UI.h, app = document.getElementById('app');
@@ -156,7 +157,7 @@
           s.current ? null : h('button.btn.small', { onclick: function () { act('setCurrent', { id: s.id }, '已設為本次聚會'); } }, '設為本次聚會'),
           h('button.btn.small.amber', { onclick: showQR }, '顯示 QR Code'),
           h('a.btn.small.ghost', { href: 'screen.html' + location.search, target: '_blank' }, '開投影畫面'),
-          h('a.btn.small.ghost', { href: 'game.html' + location.search, target: '_blank' }, '小遊戲'),
+          gameById(s.game) ? h('a.btn.small.ghost', { href: 'games/' + s.game + '.html' + location.search, target: '_blank' }, gameById(s.game).emoji + ' 小遊戲') : null,
           h('button.btn.small.ghost', { onclick: function () { exportCsv(s); } }, '匯出 Excel'),
           s.answers.length ? h('button.btn.small.danger', { onclick: function () {
             if (!confirm('確定清除「' + s.title + '」所有人的回答？\n已公開的題目也會一起取消公開。清除後無法復原，建議先「匯出 Excel」留存。')) return;
@@ -294,6 +295,7 @@
       date: asNew ? nextDate() : src.date,
       title: asNew ? '' : src.title,
       verse: asNew ? '' : (src.verse || ''),
+      game: asNew ? '' : (src.game || ''),   // 每週的遊戲不同，新聚會不沿用
       questions: qs.map(function (q) {
         return { id: asNew ? null : q.id, text: asNew && !q.leaderOnly ? '' : q.text, options: asNew && !q.leaderOnly ? [] : q.options, optText: (asNew && !q.leaderOnly ? [] : q.options).join('\n'), max: q.max, leaderOnly: q.leaderOnly };
       }),
@@ -355,7 +357,7 @@
 
     function save(makeCurrent) {
       var payload = {
-        id: F.id, date: F.date, title: F.title, verse: F.verse, makeCurrent: makeCurrent, attendees: F.attendees,
+        id: F.id, date: F.date, title: F.title, verse: F.verse, game: F.game, makeCurrent: makeCurrent, attendees: F.attendees,
         questions: F.questions.map(function (q) {
           return { id: q.id, text: q.text, options: q.optText.split('\n'), max: q.max, leaderOnly: q.leaderOnly };
         })
@@ -385,7 +387,13 @@
           h('label.field', { style: 'flex:0 0 180px' }, h('span', '日期'), h('input', { type: 'date', value: F.date, onchange: function () { F.date = this.value; } })),
           h('label.field.grow', h('span', '聚會名稱（影片標題）'), h('input', { type: 'text', value: F.title, maxLength: 60, placeholder: '例如：啟發5 為何及如何禱告', oninput: function () { F.title = this.value; } }))),
         h('label.field', h('span', '本週經文（作答完成後顯示，可留空；出處放在最後的括號內）'),
-          h('textarea', { rows: 2, value: F.verse, maxLength: 300, placeholder: '例如：凡勞苦擔重擔的人可以到我這裡來，我就使你們得安息。（馬太福音 11:28）', oninput: function () { F.verse = this.value; } }))),
+          h('textarea', { rows: 2, value: F.verse, maxLength: 300, placeholder: '例如：凡勞苦擔重擔的人可以到我這裡來，我就使你們得安息。（馬太福音 11:28）', oninput: function () { F.verse = this.value; } })),
+        h('label.field', h('span', '小遊戲（作答完成後出現；每週的新遊戲做好後會出現在這裡）'),
+          h('select', { onchange: function () { F.game = this.value; } },
+            h('option', { value: '', selected: !F.game }, '這次不安排小遊戲'),
+            (window.GAMES || []).map(function (g) {
+              return h('option', { value: g.id, selected: F.game === g.id }, g.emoji + ' ' + g.title + (g.theme ? '（' + g.theme + '）' : ''));
+            })))),
       h('div.card',
         h('h3', '討論題目'),
         normal.map(qEditor),

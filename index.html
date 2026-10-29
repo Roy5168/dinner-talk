@@ -8,13 +8,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Noto+Sans+TC:wght@400;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/style.css?v=20261028d">
+<link rel="stylesheet" href="assets/style.css?v=20261029a">
 </head>
 <body>
 <main class="wrap" id="app"><p class="waiting">載入中<span class="dot-pulse"></span></p></main>
-<script src="config.js?v=20261028d"></script>
-<script src="assets/api.js?v=20261028d"></script>
-<script src="assets/common.js?v=20261028d"></script>
+<script src="config.js?v=20261029a"></script>
+<script src="games/registry.js?v=20261029a"></script>
+<script src="assets/api.js?v=20261029a"></script>
+<script src="assets/common.js?v=20261029a"></script>
 <script>
 (function () {
   var h = UI.h, app = document.getElementById('app');
@@ -194,10 +195,7 @@
     return h('div',
       h('div.hero', UI.scene(), h('div.eyebrow', s.title), h('h1', '謝謝你，' + S.me.name)),
       s.verse ? h('div.card.soft', h('div.verse', s.verse.replace(/（[^（）]*）$/, ''), h('small', (s.verse.match(/（([^（）]*)）$/) || [])[1] || ''))) : null,
-      h('a.card', { href: 'game.html' + location.search, style: 'display:flex;gap:14px;align-items:center;text-decoration:none;color:inherit' },
-        h('span', { style: 'font-size:2.2rem' }, '🚗'),
-        h('span', h('b.hand', { style: 'font-size:1.2rem' }, '小遊戲：夜路導航'), h('br'), h('span.hint', '看不見前面的路時，你會相信誰？約 3 分鐘')),
-        h('span', { style: 'margin-left:auto;color:var(--amber-deep);font-size:1.4rem' }, '›')),
+      gameCard(s),
       h('h2', { style: 'margin-top:24px' }, '大家的分享'),
       h('p.hint', '小組長公開後，大家的回答會出現在這裡（不顯示姓名）。'),
       qs.map(function (q, i) {
@@ -209,6 +207,16 @@
         h('button.btn.ghost', { onclick: function () { S.step = 0; S.view = 'question'; render(); } }, '修改我的回答'),
         h('button.link', { onclick: switchUser }, '我不是' + S.me.name)),
       h('p.footer', '已作答 ' + s.answeredIds.length + ' / ' + s.attendees.length + ' 人'));
+  }
+
+  // 這場聚會安排的小遊戲（每週不同，由組長在「準備聚會」選）
+  function gameCard(s) {
+    var g = window.gameById && gameById(s.game);
+    if (!g) return null;
+    return h('a.card', { href: 'games/' + g.id + '.html' + location.search, style: 'display:flex;gap:14px;align-items:center;text-decoration:none;color:inherit' },
+      h('span', { style: 'font-size:2.2rem' }, g.emoji),
+      h('span', h('b.hand', { style: 'font-size:1.2rem' }, '小遊戲：' + g.title), h('br'), h('span.hint', g.desc)),
+      h('span', { style: 'margin-left:auto;color:var(--amber-deep);font-size:1.4rem' }, '›'));
   }
 
   function switchUser() {

@@ -14,7 +14,7 @@ var PASSWORD_PLACEHOLDER = '請改成你的密碼';
 
 var SCHEMA = {
   people:   ['id', 'name', 'role', 'active', 'createdAt'],
-  sessions: ['id', 'date', 'title', 'verse', 'questions', 'attendees', 'published', 'hidden', 'current', 'createdAt'],
+  sessions: ['id', 'date', 'title', 'verse', 'questions', 'attendees', 'published', 'hidden', 'current', 'createdAt', 'game'],   // 新欄位一律加在最後
   answers:  ['sessionId', 'personId', 'answers', 'updatedAt', 'token']
 };
 var JSON_FIELDS = { questions: 1, attendees: 1, published: 1, hidden: 1, answers: 1 };
@@ -170,6 +170,7 @@ var ADMIN_ = {
       s.date = String(input.date || '').slice(0, 10);
       s.title = String(input.title || '').trim().slice(0, 60) || '未命名的聚會';
       s.verse = String(input.verse || '').trim().slice(0, 300);
+      if (input.game !== undefined) s.game = String(input.game || '').replace(/[^a-z0-9-]/g, '').slice(0, 40);   // games/ 底下的遊戲代號
       s.questions = cleanQuestions_(input.questions || []);
       s.attendees = (input.attendees || []).map(String);
       var qids = s.questions.map(function (q) { return q.id; });
@@ -282,7 +283,7 @@ function ensureSeed_(store) {
     if (sessions.length) return;
     var people = store.read('people').filter(function (x) { return x.active; });
     sessions.push({
-      id: uid_(), date: todayStr_(), title: DEFAULT_TEMPLATE.title, verse: DEFAULT_TEMPLATE.verse,
+      id: uid_(), date: todayStr_(), title: DEFAULT_TEMPLATE.title, verse: DEFAULT_TEMPLATE.verse, game: 'night-drive',
       questions: JSON.parse(JSON.stringify(DEFAULT_TEMPLATE.questions)),
       attendees: people.map(function (x) { return x.id; }),
       published: [], hidden: [], current: true, createdAt: new Date().toISOString()
@@ -393,7 +394,7 @@ function publicView_(s, store) {
     results[qid] = agg;
   });
   return {
-    id: s.id, date: s.date, title: s.title, verse: s.verse, questions: s.questions, published: s.published,
+    id: s.id, date: s.date, title: s.title, verse: s.verse, game: s.game || '', questions: s.questions, published: s.published,
     attendees: s.attendees.map(function (id) { return people[id]; }).filter(Boolean)
       .map(function (x) { return { id: x.id, name: x.name, role: x.role }; }),
     answeredIds: answers.filter(function (a) { return hasContent_(a.answers); }).map(function (a) { return a.personId; }),
@@ -412,7 +413,7 @@ function adminView_(s, store, peopleRows, allAnswers) {
     results[q.id] = agg;
   });
   return {
-    id: s.id, date: s.date, title: s.title, verse: s.verse, current: s.current, questions: s.questions,
+    id: s.id, date: s.date, title: s.title, verse: s.verse, game: s.game || '', current: s.current, questions: s.questions,
     attendees: s.attendees, published: s.published, hidden: s.hidden, results: results,
     answers: answers.map(function (a) {
       var person = people[a.personId] || {};
@@ -449,7 +450,7 @@ function sheetStore_() {
           var x = v[i];
           if (JSON_FIELDS[c]) { try { x = x === '' ? (c === 'answers' ? {} : []) : JSON.parse(x); } catch (e) { x = []; } }
           else if (BOOL_FIELDS[c]) x = x === true || String(x).toUpperCase() === 'TRUE';
-          else x = String(x);
+          else x = x === undefined ? '' : String(x);   // 舊試算表還沒有新欄位時是空的
           o[c] = x;
         });
         return o;
@@ -461,6 +462,7 @@ function sheetStore_() {
     write: function (name, rows) {
       var cols = SCHEMA[name];
       var sh = sheetOf(name);
+      sh.getRange(1, 1, 1, cols.length).setValues([cols]);   // 補上後來新增的欄位名稱
       var data = rows.map(function (o) {
         return cols.map(function (c) {
           var x = o[c];
