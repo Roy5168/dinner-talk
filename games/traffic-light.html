@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>爸爸的紅綠燈</title>
+<meta name="theme-color" content="#f5ede0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Noto+Sans+TC:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css?v=20261029b">
+<style>
+  :root { --green: #4f8a4b; --yellow: #e0a526; --red: #c2513a; }
+  .wrap { padding-top: 12px; }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .top .count { font-size: .9rem; color: var(--ink-soft); }
+  .dots { display: flex; gap: 5px; }
+  .dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); display: block; }
+  .dots i.g { background: var(--green); } .dots i.y { background: var(--yellow); } .dots i.r { background: var(--red); } .dots i.now { outline: 2px solid var(--amber); outline-offset: 1px; }
+
+  /* 紅綠燈 */
+  .light { width: 74px; margin: 6px auto 0; padding: 8px; background: #3b2a20; border-radius: 22px; display: grid; gap: 8px; box-shadow: var(--shadow); }
+  .light span { width: 56px; height: 56px; border-radius: 50%; background: #5a463a; transition: background .25s, box-shadow .25s; }
+  .light.r .lr { background: var(--red); box-shadow: 0 0 24px 6px rgba(194,81,58,.6); }
+  .light.y .ly { background: var(--yellow); box-shadow: 0 0 24px 6px rgba(224,165,38,.6); }
+  .light.g .lg { background: var(--green); box-shadow: 0 0 24px 6px rgba(79,138,75,.6); }
+  .light.small { width: 40px; padding: 5px; gap: 5px; border-radius: 12px; display: inline-grid; margin: 0; vertical-align: middle; }
+  .light.small span { width: 30px; height: 30px; }
+  .pole { width: 10px; height: 18px; background: #3b2a20; margin: 0 auto; border-radius: 0 0 4px 4px; }
+
+  /* 孩子的請求 */
+  .kid { display: flex; gap: 14px; align-items: flex-start; }
+  .kid .face { flex: 0 0 64px; height: 64px; border-radius: 50%; background: var(--amber-soft); display: grid; place-items: center; font-size: 2.3rem; }
+  .kid .who { font-size: .9rem; color: var(--ink-soft); }
+  .bubble { position: relative; background: #fff; border: 1.5px solid var(--line); border-radius: 16px; padding: 12px 14px; margin-top: 6px; font-size: 1.12rem; line-height: 1.55; font-family: var(--font-hand); }
+  .bubble::before { content: ''; position: absolute; left: -8px; top: 16px; width: 14px; height: 14px; background: #fff; border-left: 1.5px solid var(--line); border-bottom: 1.5px solid var(--line); transform: rotate(45deg); }
+  .context { margin-top: 10px; font-size: .92rem; color: var(--ink-soft); }
+
+  .choices { display: grid; gap: 10px; margin-top: 16px; }
+  .choice { display: flex; align-items: center; gap: 12px; border: 1.5px solid var(--line); background: var(--paper); border-radius: 16px; padding: 12px 14px; font-size: 1.05rem; text-align: left; transition: transform .08s, border-color .15s; }
+  .choice:active { transform: scale(.98); }
+  .choice b { flex: 0 0 34px; height: 34px; border-radius: 50%; display: block; }
+  .choice.g b { background: var(--green); } .choice.y b { background: var(--yellow); } .choice.r b { background: var(--red); }
+  .choice small { display: block; color: var(--ink-soft); font-size: .85rem; }
+  .choice.g:hover { border-color: var(--green); } .choice.y:hover { border-color: var(--yellow); } .choice.r:hover { border-color: var(--red); }
+
+  .verdict { border-left: 5px solid var(--amber); }
+  .verdict.g { border-left-color: var(--green); } .verdict.y { border-left-color: var(--yellow); } .verdict.r { border-left-color: var(--red); }
+  .verdict .head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .verdict .tag2 { font-size: .85rem; padding: .1em .7em; border-radius: 999px; color: #fff; font-weight: 600; }
+  .bg-g { background: var(--green); } .bg-y { background: var(--yellow); } .bg-r { background: var(--red); }
+  .reaction { font-size: 1.05rem; margin: 6px 0; font-family: var(--font-hand); }
+
+  .tally { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 12px 0; text-align: center; }
+  .tally div { border-radius: 14px; padding: 10px 6px; color: #fff; }
+  .tally b { display: block; font-size: 1.9rem; font-family: var(--font-hand); line-height: 1.2; }
+  .legend { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: .95rem; }
+  .legend td { padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .legend td:first-child { white-space: nowrap; font-weight: 600; }
+  .reflect { padding-left: 1.2em; margin: 8px 0; }
+  .reflect li { margin: 6px 0; }
+  .role { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0 6px; }
+  .role button { border: 1.5px solid var(--line); background: var(--paper); border-radius: 16px; padding: 14px 8px; font-size: 1.1rem; font-family: var(--font-hand); font-weight: 700; }
+  .role button span { display: block; font-size: 2.2rem; }
+  .fade { animation: fade .35s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .fade { animation: none; } }
+</style>
+</head>
+<body>
+<main class="wrap" id="app"></main>
+<script>
+(function () {
+  var app = document.getElementById('app');
+  var LIGHTS = {
+    g: { name: '綠燈', act: '好，給你', hint: '現在就答應', cls: 'g' },
+    y: { name: '黃燈', act: '再等等', hint: '時候還沒到', cls: 'y' },
+    r: { name: '紅燈', act: '不行喔', hint: '因為愛你，所以不給', cls: 'r' }
+  };
+
+  // 孩子的請求。best＝多數父母會選的燈號；ok＝也說得通的選擇
+  var ROUNDS = [
+    { face: '🧑', who: '16 歲的兒子', ask: '我開始長鬍子了，可以給我一把刮鬍刀嗎？', best: 'g',
+      why: '他長大了，真的需要。好爸媽知道孩子需要什麼，就會給。這是影片裡的「綠燈」。',
+      yes: '謝啦！我終於像個大人了！' },
+    { face: '🧑', who: '同一個 16 歲的兒子', ask: '那……車鑰匙也借我好嗎？我想自己開車去兜風！', best: 'y', ok: ['r'],
+      why: '不是永遠不行，而是時候還沒到：要先滿 18 歲、考到駕照。這是影片裡的「黃燈」，等待也是一種愛。',
+      yes: '好吧，我先去報名駕訓班……' },
+    { face: '🧒', who: '5 歲的孩子', ask: '晚餐前，我可以把這一整盒巧克力吃完嗎？', best: 'r', ok: ['y'],
+      why: '孩子很想要，但你知道吃完會肚子痛、晚餐也吃不下。拒絕不是不愛，而是因為愛。這是「紅燈」。',
+      yes: '哼……那我吃完飯可以吃一顆嗎？' },
+    { face: '👧', who: '8 歲的女兒', ask: '我肚子好餓，晚餐什麼時候好？', best: 'g',
+      why: '每天的飲食是最基本的需要，好爸媽一定會準備。耶穌教我們禱告：「我們日用的飲食，今日賜給我們。」',
+      yes: '耶！今天吃什麼？' },
+    { face: '👶', who: '3 歲的孩子', ask: '我想玩廚房那把亮亮的菜刀！', best: 'r',
+      why: '孩子看不出危險，你看得出來。有些請求一定要拒絕，因為你比他更清楚後果。',
+      yes: '（哭了一下，然後被積木吸引走了）' },
+    { face: '👧', who: '12 歲的女兒', ask: '我這次考試考很差……可以抱抱我，聽我說一下嗎？', best: 'g',
+      why: '她要的不是東西，而是你。天父也是這樣：傷心時，可以在祂懷裡哭；受委屈時，可以向祂傾吐。',
+      yes: '（抱著你哭了一下）謝謝你都沒有罵我。' },
+    { face: '🧒', who: '7 歲的孩子', ask: '我想養一隻小狗，我保證每天都會照顧牠！', best: 'y', ok: ['g', 'r'],
+      why: '這題沒有標準答案。很多爸媽會說「先等等」：等家裡準備好，也等孩子證明能負起責任。等待的時候，孩子也在長大。',
+      yes: '那我先每天幫忙澆花，練習照顧！' },
+    { face: '🧒', who: '6 歲的孩子', ask: '隔壁班那個同學好討厭，你可以叫他轉學嗎？', best: 'r', ok: ['y'],
+      why: '你愛自己的孩子，也在乎那個同學。好爸媽不會照單全收，而是陪孩子一起想辦法。影片裡也有人求上帝「讓對面的店倒閉」，上帝其實也愛對面的人。',
+      yes: '好吧……那你教我怎麼跟他相處？' },
+    { face: '🧑', who: '14 歲的兒子', ask: '對不起，我踢球打破了鄰居的窗戶……你可以原諒我嗎？', best: 'g',
+      why: '承認錯誤需要勇氣。好爸媽會原諒，再陪他一起去跟鄰居道歉。禱告裡的「對不起」也是這樣：天父愛我們，必定饒恕。',
+      yes: '謝謝……那我們現在一起去按鄰居的門鈴。' }
+  ];
+
+  var S = { role: '爸爸', i: 0, picks: [] };
+
+  function lightHtml(c, small) {
+    return '<div class="light' + (small ? ' small' : '') + (c ? ' ' + c : '') + '"><span class="lr"></span><span class="ly"></span><span class="lg"></span></div>';
+  }
+  function dots() {
+    return '<div class="dots">' + ROUNDS.map(function (r, k) {
+      var p = S.picks[k];
+      return '<i class="' + (p ? p : '') + (k === S.i ? ' now' : '') + '"></i>';
+    }).join('') + '</div>';
+  }
+  function show(html) { app.innerHTML = '<div class="fade">' + html + '</div>'; window.scrollTo(0, 0); }
+  function $(id) { return document.getElementById(id); }
+
+  function intro() {
+    show(
+      '<div class="hero">' + lightHtml('g') + '<div class="pole"></div>' +
+      '<div class="eyebrow" style="margin-top:10px">啟發人生聚會・小遊戲</div><h1>爸爸的紅綠燈</h1></div>' +
+      '<div class="card">' +
+      '<p>今天換你當爸媽！孩子會一個接一個來找你，想要各種東西。</p>' +
+      '<p>每一個請求，你都可以亮：</p>' +
+      '<table class="legend">' +
+      '<tr><td style="color:var(--green)">● 綠燈</td><td>好，給你</td></tr>' +
+      '<tr><td style="color:#b8861c">● 黃燈</td><td>再等等，時候還沒到</td></tr>' +
+      '<tr><td style="color:var(--red)">● 紅燈</td><td>不行，因為愛你</td></tr></table>' +
+      '<p>你想當：</p>' +
+      '<div class="role"><button id="dad"><span>👨</span>爸爸</button><button id="mom"><span>👩</span>媽媽</button></div>' +
+      '<p class="faint" style="text-align:center">共 ' + ROUNDS.length + ' 個請求・約 3 分鐘</p></div>');
+    $('dad').onclick = function () { start('爸爸'); };
+    $('mom').onclick = function () { start('媽媽'); };
+  }
+
+  function start(role) { S.role = role; S.i = 0; S.picks = []; ask(); }
+
+  function ask() {
+    var r = ROUNDS[S.i];
+    show(
+      '<div class="top">' + dots() + '<span class="count">第 ' + (S.i + 1) + ' / ' + ROUNDS.length + ' 個</span></div>' +
+      lightHtml('') + '<div class="pole"></div>' +
+      '<div class="card"><div class="kid"><div class="face">' + r.face + '</div><div style="flex:1">' +
+      '<div class="who">' + r.who + '跑來找你：</div>' +
+      '<div class="bubble">「' + S.role + '，' + r.ask + '」</div></div></div>' +
+      '<div class="choices">' + ['g', 'y', 'r'].map(function (c) {
+        var L = LIGHTS[c];
+        return '<button class="choice ' + c + '" data-c="' + c + '"><b></b><span>' + L.name + '・' + L.act + '<small>' + L.hint + '</small></span></button>';
+      }).join('') + '</div></div>');
+    Array.prototype.forEach.call(document.querySelectorAll('.choice'), function (b) {
+      b.onclick = function () { answer(b.getAttribute('data-c')); };
+    });
+  }
+
+  function answer(c) {
+    var r = ROUNDS[S.i];
+    S.picks[S.i] = c;
+    var B = LIGHTS[r.best];
+    var same = c === r.best, okToo = (r.ok || []).indexOf(c) >= 0;
+    var head = same ? '你跟大多數' + S.role + '想的一樣 👍'
+      : okToo ? '你選了' + LIGHTS[c].name + '，也說得通。很多' + S.role + '會選' + B.name + '：'
+      : '你選了' + LIGHTS[c].name + '。換個角度想想，很多' + S.role + '會選' + B.name + '：';
+    var reaction = c === 'g' && r.best !== 'g' ? '孩子：「耶！」（但你心裡好像有點不安……）'
+      : '孩子：「' + r.yes + '」';
+    var last = S.i === ROUNDS.length - 1;
+    show(
+      '<div class="top">' + dots() + '<span class="count">第 ' + (S.i + 1) + ' / ' + ROUNDS.length + ' 個</span></div>' +
+      lightHtml(c) + '<div class="pole"></div>' +
+      '<div class="card verdict ' + r.best + '">' +
+      '<div class="head"><span class="tag2 bg-' + r.best + '">' + B.name + '・' + B.act + '</span></div>' +
+      '<p><b>' + head + '</b></p><p>' + r.why + '</p>' +
+      '<p class="reaction">' + reaction + '</p></div>' +
+      '<button class="btn amber block" id="next">' + (last ? '看看結果' : '下一個孩子來了') + '</button>');
+    $('next').onclick = function () { if (last) finish(); else { S.i++; ask(); } };
+  }
+
+  function finish() {
+    var n = { g: 0, y: 0, r: 0 }, match = 0;
+    S.picks.forEach(function (p, k) { n[p]++; if (p === ROUNDS[k].best) match++; });
+    show(
+      '<div class="hero"><div class="eyebrow">' + S.role + '的這一天</div><h1>辛苦了！</h1></div>' +
+      '<div class="tally"><div class="bg-g"><b>' + n.g + '</b>綠燈</div><div class="bg-y"><b>' + n.y + '</b>黃燈</div><div class="bg-r"><b>' + n.r + '</b>紅燈</div></div>' +
+      '<div class="card"><p>' + (n.y + n.r ? '你沒有每次都說「好」，但每一個決定都是為了孩子好。' : '你每次都說「好」，孩子一定很開心——但菜刀和整盒巧克力，真的該給嗎？') +
+      '<br>好' + S.role + '不是有求必應，而是<b>看得比孩子更遠</b>。</p>' +
+      '<p class="faint">其中 ' + match + ' 次和大多數爸媽的選擇一樣。</p></div>' +
+      '<div class="card soft"><p class="verse">「你們雖然不好，尚且知道拿好東西給兒女，何況你們在天上的父，豈不更把好東西給求他的人嗎？」<small>馬太福音 7:11</small></p></div>' +
+      '<div class="card"><h3>上帝回應禱告的三種燈號</h3>' +
+      '<table class="legend">' +
+      '<tr><td style="color:var(--green)">● 綠燈</td><td>立刻應允。祂知道你真的需要。</td></tr>' +
+      '<tr><td style="color:#b8861c">● 黃燈</td><td>要你等待。不是不給，而是時候還沒到。</td></tr>' +
+      '<tr><td style="color:var(--red)">● 紅燈</td><td>不應允。祂知道什麼對你最好，有時拒絕是一種保護。</td></tr></table>' +
+      '<p>就像你剛才當' + S.role + '一樣：天父愛我們，所以祂的回應不一定是我們想要的，卻一定是好的。被拒絕不好受，但過一段時間回頭看，常常會感謝祂的安排。</p></div>' +
+      '<div class="card"><h3>聊聊看</h3><ul class="reflect">' +
+      '<li>剛才哪一個請求最難決定？為什麼？</li>' +
+      '<li>如果現在可以向上帝求一樣東西，你會求什麼？</li>' +
+      '<li>你有沒有過「黃燈」或「紅燈」的經驗？後來回頭看，有什麼不一樣的想法？</li></ul></div>' +
+      '<div class="card soft"><h3>想試試看禱告嗎？</h3>' +
+      '<p>禱告不需要華麗的詞，就像孩子跟' + S.role + '說話。可以用三個詞開始：</p>' +
+      '<p><b>謝謝</b>：謝謝祂給你的一切<br><b>對不起</b>：為做錯的事求原諒<br><b>請</b>：把你和別人的需要告訴祂</p>' +
+      '<p class="hand" style="font-size:1.1rem">主啊，我感謝你，你是我們的天父，你愛我，你希望我透過禱告能更加認識你。求你幫助我禱告。奉耶穌的名求，阿們。</p></div>' +
+      '<div class="btn-row" style="justify-content:center;margin-top:12px">' +
+      '<button class="btn ghost" id="again">再玩一次</button><a class="btn" href="../' + location.search + '">回到聚會頁</a></div>');
+    $('again').onclick = intro;
+  }
+
+  intro();
+})();
+</script>
+</body>
+</html>
