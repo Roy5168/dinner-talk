@@ -13,7 +13,8 @@
 <body>
 <main class="wrap" id="app"><p class="waiting">載入中<span class="dot-pulse"></span></p></main>
 <script src="config.js?v=20261029b"></script>
-<script src="games/registry.js?v=20261029b"></script>
+<!-- 遊戲清單每週更新，避開瀏覽器 10 分鐘快取，每次都抓最新版 -->
+<script>document.write('<script src="games/registry.js?t=' + Date.now() + '"><\/script>');</script>
 <script src="assets/api.js?v=20261029b"></script>
 <script src="assets/common.js?v=20261029b"></script>
 <script>
