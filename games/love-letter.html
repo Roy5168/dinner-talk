@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>情書解密</title>
+<meta name="theme-color" content="#f5ede0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Noto+Sans+TC:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css?v=20261030a">
+<style>
+  .wrap { padding-top: 12px; }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+  .env-row { display: flex; gap: 6px; font-size: 1.3rem; }
+  .env-row span { opacity: .3; transition: opacity .3s; }
+  .env-row span.done { opacity: 1; }
+  .env-row span.now { opacity: .8; }
+  .count { font-size: .9rem; color: var(--ink-soft); }
+
+  .story p { font-size: 1.05rem; }
+  .who { display: inline-block; font-size: .85rem; background: var(--amber-soft); color: var(--amber-deep); border-radius: 999px; padding: .1em .8em; font-weight: 600; margin-bottom: 6px; }
+  .feel { display: grid; gap: 8px; margin-top: 10px; }
+  .feel button { text-align: left; border: 1.5px solid var(--line); background: var(--paper); border-radius: 14px; padding: 11px 14px; font-size: 1rem; }
+  .feel button:hover { border-color: var(--amber); }
+  .feel-note { margin-top: 10px; font-size: .95rem; color: var(--ink-soft); }
+
+  /* 拼句子 */
+  .slots { min-height: 120px; background: #fffdf8; border: 1.5px dashed #e3cfae; border-radius: 14px; padding: 12px; font-family: var(--font-hand); font-size: 1.2rem; line-height: 1.9; }
+  .slots .ph { color: var(--ink-faint); font-family: var(--font-body); font-size: .95rem; }
+  .slots .got { color: var(--wood-dark); animation: pop .3s ease; }
+  @keyframes pop { from { opacity: 0; } to { opacity: 1; } }
+  .pieces { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 6px; }
+  .piece { border: 1.5px solid #e6c79a; background: #fff6e8; border-radius: 12px; padding: 8px 12px; font-family: var(--font-hand); font-size: 1.1rem; transition: transform .1s; }
+  .piece:active { transform: scale(.96); }
+  .piece.used { visibility: hidden; }
+  .piece.shake { animation: shake .35s; border-color: var(--terracotta); }
+  @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+  .tools { display: flex; justify-content: space-between; align-items: center; }
+
+  /* 信封 */
+  .envelope { position: relative; width: 220px; height: 140px; margin: 10px auto 20px; perspective: 600px; }
+  .envelope .body { position: absolute; inset: 0; background: #e9cfa6; border-radius: 8px; box-shadow: var(--shadow); }
+  .envelope .flap { position: absolute; left: 0; right: 0; top: 0; height: 80px; background: #dcb985; clip-path: polygon(0 0, 100% 0, 50% 100%); transform-origin: top; transition: transform .6s ease; border-radius: 8px 8px 0 0; }
+  .envelope .seal { position: absolute; left: 50%; top: 62px; width: 34px; height: 34px; margin-left: -17px; border-radius: 50%; background: var(--terracotta); color: #fff; display: grid; place-items: center; font-size: 1rem; transition: opacity .3s; }
+  .envelope.open .flap { transform: rotateX(180deg); }
+  .envelope.open .seal { opacity: 0; }
+  .letter { background: #fffdf6; border: 1px solid #ecdcc2; border-radius: 6px; padding: 22px 20px; box-shadow: var(--shadow); background-image: repeating-linear-gradient(transparent, transparent 31px, #f1e6d3 32px); animation: rise .6s ease; }
+  @keyframes rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+  .letter .text { font-family: var(--font-hand); font-size: 1.25rem; line-height: 32px; color: var(--wood-dark); }
+  .letter .ref { text-align: right; color: var(--ink-soft); font-size: .9rem; margin-top: 8px; }
+  .after { margin-top: 14px; }
+  .after p { font-size: 1.02rem; }
+
+  .reflect { padding-left: 1.2em; margin: 8px 0; }
+  .reflect li { margin: 6px 0; }
+  details.verse-item { border-bottom: 1px solid var(--line); padding: 8px 0; }
+  details.verse-item summary { cursor: pointer; font-weight: 600; }
+  details.verse-item p { font-family: var(--font-hand); font-size: 1.1rem; color: var(--wood-dark); margin: 6px 0 0; }
+  .fade { animation: fade .35s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .fade, .letter, .slots .got { animation: none; } .envelope .flap { transition: none; } }
+</style>
+</head>
+<body>
+<main class="wrap" id="app"></main>
+<script>
+(function () {
+  var app = document.getElementById('app');
+
+  // 五個人、五句話。故事取自啟發課程第 6 集影片，經文依和合本
+  var LEVELS = [
+    {
+      who: '一個恨透父親的年輕人',
+      story: ['父親好賭，借了很多高利貸，討債的人常常上門騷擾。這個年輕人恨透了父親，甚至曾經拿著斧頭，要問父親是哪一隻手賭的錢。',
+        '後來和媽媽也鬧翻了，一氣之下離家出走，覺得未來一片黑暗。'],
+      ask: '如果你是這個年輕人，心裡最需要的是什麼？',
+      feel: ['有人懂我的痛', '一個重新開始的機會', '我不知道，只覺得很黑暗'],
+      lead: '在新城市工作時，同事把一整本聖經借給這個年輕人。讀到馬太福音第五章時，有一句話「像針一樣紮進心裡」——',
+      pieces: ['只是我告訴你們，', '要愛你們的仇敵，', '為那逼迫你們的', '禱告。'],
+      ref: '馬太福音 5:44',
+      after: ['這句話像一盞燈，照亮了原本看不到希望的未來。', '後來，這個年輕人流著淚向父親道歉，請求父親原諒。現在最珍惜的，就是和父母一起相處的時間。']
+    },
+    {
+      who: '一個小學生（舞者廖智）',
+      story: ['還在讀小學的時候，廖智在一本雜誌上偶然讀到一段描寫「愛」的文字，最後寫著：摘自《聖經》。',
+        '那時她年紀還小，卻被這段話描述的愛深深吸引。'],
+      ask: '你小時候有沒有讀過一句話，到現在都還記得？',
+      feel: ['有！到現在還記得', '好像有，想不太起來', '沒有特別的'],
+      lead: '吸引她的那段話是這樣寫的——',
+      pieces: ['愛是恆久忍耐，', '又有恩慈；', '愛是不嫉妒；', '愛是不自誇，', '不張狂。'],
+      ref: '哥林多前書 13:4',
+      after: ['她跑去書店找這本書，找了很多年都沒找到。直到長大後、地震的那一年，有人送了她一本聖經。',
+        '她興奮得天天讀，晚上還躲在被子裡打著手電筒讀，很快就把整本新約讀完了。']
+    },
+    {
+      who: '一個在人生谷底的人',
+      story: ['父親剛過世沒多久，婚姻也出了狀況、離婚了，孩子判給了對方。',
+        '在最低谷、最迷茫的時候，腦中一直在想：人活著的意義，究竟在哪裡？'],
+      ask: '在最迷茫的時候，你會想找什麼？',
+      feel: ['一個答案', '一點安靜', '一個可以回去的家'],
+      lead: '一位老師帶這位朋友去參加啟發課程。茶几上有一本書，翻開剛好是馬太福音第六章——',
+      pieces: ['我們', '在天上的父：', '願人都尊', '你的名為聖。'],
+      ref: '馬太福音 6:9',
+      after: ['讀完的那一刻，整個人的心全然打開，「好像有一股清泉從頭到尾澆灌我」，覺得終於找到人生要找的答案。',
+        '三個月後讀完整本聖經，同樣的街道、同樣的人群，看起來卻都不一樣了。和孩子的關係，也慢慢恢復了。']
+    },
+    {
+      who: '一位在病房裡的癌症病人',
+      story: ['從小對自己要求很高，相信這個世界上誰都靠不住，唯一能靠的就是自己。',
+        '47 歲那年，確診淋巴癌，最大的兩顆腫瘤像拳頭一樣大。最虛弱的時候，連一件衣服都拿不起來。'],
+      ask: '如果什麼都靠不了的時候，你會向誰求救？',
+      feel: ['家人朋友', '醫生', '不知道……'],
+      lead: '在移植病房裡快撐不下去時，心裡只喊著：「上帝救我！」恍惚中，看見有人抱起自己，走出黑暗的山，來到一片青草地和清澈的河邊。出院後翻開聖經，讀到了詩篇第二十三篇——',
+      pieces: ['耶和華是我的牧者，', '我必不致缺乏。', '他使我躺臥', '在青草地上，', '領我在可安歇的水邊。'],
+      ref: '詩篇 23:1–2',
+      after: ['「跟我經歷的一模一樣。」讀到的那一刻，當場淚流滿面。',
+        '從瀕臨死亡到康復，這段經文一直是安慰和幫助，也明白了：原來可以不必再只靠自己。']
+    },
+    {
+      who: '一位剛出社會的設計師',
+      story: ['剛出社會，在一間公司當平面設計師。身邊都是很優秀的設計師，作品常常不被看好，還經常被老闆罵。',
+        '那段時間很灰心，覺得自己一點價值都沒有。'],
+      ask: '你曾經覺得自己不夠好嗎？',
+      feel: ['常常', '偶爾', '很少'],
+      lead: '那時候，讀到了羅馬書第八章——',
+      pieces: ['誰能使我們', '與基督的愛', '隔絕呢？', '難道是患難嗎？', '是困苦嗎？'],
+      ref: '羅馬書 8:35',
+      after: ['這句話提醒了這位設計師：自己的價值，不是來自能力和表現，而是來自上帝無條件的愛。',
+        '後來作品在網路上被很多人稱讚、轉載，又讀到另一句話：「不是倚靠勢力，不是倚靠才能，乃是倚靠我的靈方能成事。」於是學會了謙卑。無論在高山或低谷，聖經都在對這位設計師說話。']
+    }
+  ];
+
+  var S = { i: 0, next: 0, order: [] };
+
+  function $(id) { return document.getElementById(id); }
+  function show(html) { app.innerHTML = '<div class="fade">' + html + '</div>'; window.scrollTo(0, 0); }
+  function top() {
+    return '<div class="top"><div class="env-row">' + LEVELS.map(function (L, k) {
+      return '<span class="' + (k < S.i ? 'done' : k === S.i ? 'now' : '') + '">' + (k < S.i ? '💌' : '✉️') + '</span>';
+    }).join('') + '</div><span class="count">第 ' + (S.i + 1) + ' / ' + LEVELS.length + ' 封</span></div>';
+  }
+  function shuffled(n) {
+    var a, ok;
+    do {
+      a = []; for (var k = 0; k < n; k++) a.push(k);
+      for (k = n - 1; k > 0; k--) { var j = Math.floor(Math.random() * (k + 1)), t = a[k]; a[k] = a[j]; a[j] = t; }
+      ok = a.some(function (v, idx) { return v !== idx; });
+    } while (!ok);
+    return a;
+  }
+
+  function intro() {
+    show(
+      '<div class="hero"><div class="envelope" style="margin-top:6px"><div class="body"></div><div class="flap"></div><div class="seal">♥</div></div>' +
+      '<div class="eyebrow">啟發人生聚會・小遊戲</div><h1>情書解密</h1></div>' +
+      '<div class="card">' +
+      '<p>有人說，聖經像一本說明書；也有人說，它像一封情書。</p>' +
+      '<p>接下來有五位真實人物，各自在人生的某個時刻，被一句話接住了。</p>' +
+      '<p>每一關，先看看他們經歷了什麼，再把被打散的那句話<b>拼回原來的順序</b>，看看後來發生了什麼。</p>' +
+      '<button class="btn amber block" id="go" style="margin-top:10px">打開第一封信</button>' +
+      '<p class="faint" style="text-align:center;margin-top:10px">共 5 封・約 4 分鐘・不需要讀過聖經</p></div>');
+    $('go').onclick = function () { S.i = 0; story(); };
+  }
+
+  function story() {
+    var L = LEVELS[S.i];
+    show(top() +
+      '<div class="card story"><span class="who">' + L.who + '</span>' +
+      L.story.map(function (p) { return '<p>' + p + '</p>'; }).join('') +
+      '<h3 style="margin-top:14px">' + L.ask + '</h3>' +
+      '<div class="feel">' + L.feel.map(function (f, k) { return '<button data-k="' + k + '">' + f + '</button>'; }).join('') + '</div>' +
+      '<p class="feel-note">沒有標準答案，選一個最接近你的感覺。</p></div>');
+    Array.prototype.forEach.call(document.querySelectorAll('.feel button'), function (b) {
+      b.onclick = function () { puzzle(); };
+    });
+  }
+
+  function puzzle() {
+    var L = LEVELS[S.i];
+    S.next = 0; S.order = shuffled(L.pieces.length);
+    show(top() +
+      '<div class="card"><p>' + L.lead + '</p>' +
+      '<div class="slots" id="slots"><span class="ph">依照順序點下面的句子，把這句話拼回來</span></div>' +
+      '<div class="pieces" id="pieces">' + S.order.map(function (k) {
+        return '<button class="piece" data-k="' + k + '">' + L.pieces[k] + '</button>';
+      }).join('') + '</div>' +
+      '<div class="tools"><span class="faint" id="tip"></span><button class="link" id="hint">給我一點提示</button></div></div>');
+    Array.prototype.forEach.call(document.querySelectorAll('.piece'), function (b) {
+      b.onclick = function () { tap(b); };
+    });
+    $('hint').onclick = function () {
+      var b = document.querySelector('.piece[data-k="' + S.next + '"]');
+      if (b) { b.style.borderColor = 'var(--olive)'; b.style.background = 'var(--olive-soft)'; }
+      $('tip').textContent = '下一段是綠色的那塊';
+    };
+  }
+
+  function tap(b) {
+    var L = LEVELS[S.i], k = +b.getAttribute('data-k');
+    if (k !== S.next) {
+      b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake');
+      $('tip').textContent = '再想想，哪一段應該接在前面？';
+      return;
+    }
+    var slots = $('slots');
+    if (S.next === 0) slots.innerHTML = '';
+    var span = document.createElement('span'); span.className = 'got'; span.textContent = L.pieces[k];
+    slots.appendChild(span);
+    b.classList.add('used');
+    $('tip').textContent = '';
+    S.next++;
+    if (S.next === L.pieces.length) setTimeout(reveal, 450);
+  }
+
+  function reveal() {
+    var L = LEVELS[S.i], last = S.i === LEVELS.length - 1;
+    show(top() +
+      '<div class="envelope" id="env"><div class="body"></div><div class="flap"></div><div class="seal">♥</div></div>' +
+      '<div id="paper" style="display:none">' +
+      '<div class="letter"><div class="text">「' + L.pieces.join('') + '」</div><div class="ref">' + L.ref + '</div></div>' +
+      '<div class="card after"><span class="who">後來</span>' + L.after.map(function (p) { return '<p>' + p + '</p>'; }).join('') + '</div>' +
+      '<button class="btn amber block" id="next">' + (last ? '看看這五封信' : '打開下一封信') + '</button></div>');
+    setTimeout(function () { $('env').classList.add('open'); }, 150);
+    setTimeout(function () { $('env').style.display = 'none'; $('paper').style.display = 'block'; }, 900);
+    $('next').onclick = function () {
+      if (last) { S.i = LEVELS.length; finish(); } else { S.i++; story(); }
+    };
+  }
+
+  function finish() {
+    show(
+      '<div class="hero"><div class="env-row" style="justify-content:center;font-size:1.8rem">💌💌💌💌💌</div>' +
+      '<h1 style="margin-top:8px">五封信都打開了</h1></div>' +
+      '<div class="card"><p>這五個人，在人生不同的時刻，都被一句話接住了：在恨裡、在好奇裡、在谷底、在病床上、在挫折裡。</p>' +
+      '<p>影片說，聖經是上帝對人說的話。你會想讀讀看其中哪一段嗎？</p>' +
+      LEVELS.map(function (L) {
+        return '<details class="verse-item"><summary>' + L.ref + '</summary><p>「' + L.pieces.join('') + '」</p></details>';
+      }).join('') + '</div>' +
+      '<div class="card"><h3>聊聊看</h3><ul class="reflect">' +
+      '<li>五個故事裡，哪一個最讓你有感覺？為什麼？</li>' +
+      '<li>有沒有一句話（不一定是聖經）在你低潮的時候幫助過你？</li>' +
+      '<li>你對聖經的第一印象是什麼？像說明書、情書、家書，還是別的？</li></ul></div>' +
+      '<div class="card soft"><h3>如果想試著讀讀看</h3>' +
+      '<p><b>1. 找一個固定的時間和地點</b>：早餐前十分鐘、睡前，或通勤時聽有聲聖經都可以。</p>' +
+      '<p><b>2. 認識不同的文體</b>：聖經裡有歷史、詩歌、書信、預言，用不同的方式讀，會更容易懂。</p>' +
+      '<p><b>3. 讀之前先禱告</b>：可以問上帝：「你想透過這段話對我說什麼？」</p>' +
+      '<p class="faint">新朋友可以從馬太福音或馬可福音開始，讀讀耶穌的故事。</p></div>' +
+      '<div class="btn-row" style="justify-content:center;margin-top:12px">' +
+      '<button class="btn ghost" id="again">再玩一次</button><a class="btn" href="../' + location.search + '">回到聚會頁</a></div>');
+    $('again').onclick = intro;
+  }
+
+  intro();
+})();
+</script>
+</body>
+</html>
